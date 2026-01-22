@@ -1,0 +1,98 @@
+{
+  "_comment": "Kopiera denna till config.json och redigera med era värden",
+
+  "scolia": {
+    "serialNumber": "DITT-SERIENUMMER",
+    "_comment_serialNumber": "Ert Scolia darttavla serienummer",
+
+    "accessToken": "DIN-ACCESS-TOKEN",
+    "_comment_accessToken": "Access token från Scolia (köps separat)",
+
+    "serverUrl": "wss://game.scoliadarts.com/api/v1/social",
+    "_comment_serverUrl": "Scolia WebSocket server (ändra ej)",
+
+    "simulationMode": true,
+    "_comment_simulationMode": "true = testa utan darttavla, false = live-läge",
+
+    "reconnectDelay": 5000
+  },
+
+  "lightshark": {
+    "enabled": true,
+    "_comment_enabled": "true = använd LightShark, false = inaktivera",
+
+    "ip": "192.168.1.100",
+    "_comment_ip": "LightShark IP-adress (kolla Settings → Network)",
+
+    "oscPort": 8000,
+    "_comment_oscPort": "OSC port (standard 8000, aktivera i Settings → Network → OSC)",
+
+    "throwEffect": {
+      "enabled": true,
+      "_comment_enabled": "true = använd effekter vid kast",
+
+      "colorMode": {
+        "enabled": true,
+        "_comment_colorMode": "Färgläge - matchar darttavlans röda/gröna färger",
+
+        "redExecutor": { "page": 1, "column": 2, "row": 1 },
+        "_comment_redExecutor": "Executor för röda segment (LED Red)",
+
+        "greenExecutor": { "page": 1, "column": 2, "row": 2 },
+        "_comment_greenExecutor": "Executor för gröna segment (LED Green)",
+
+        "bullseyeExecutor": { "page": 1, "column": 6, "row": 6 },
+        "_comment_bullseyeExecutor": "Executor för bullseye 50p (Moln Ow Strobe)",
+
+        "redSegments": [20, 18, 13, 10, 2, 3, 7, 8, 14, 12],
+        "_comment_redSegments": "Segment med röd färg på darttavlan",
+
+        "greenSegments": [1, 4, 6, 15, 17, 19, 16, 11, 9, 5],
+        "_comment_greenSegments": "Segment med grön färg på darttavlan",
+
+        "bull25": "green",
+        "_comment_bull25": "Outer bull (25p) färg: green"
+      },
+
+      "noScoreExecutor": { "page": 1, "column": 8, "row": 4 },
+      "_comment_noScoreExecutor": "Executor vid miss (LED Dim OFF - släcker lampor)",
+
+      "resetExecutor": { "page": 1, "column": 1, "row": 1 },
+      "_comment_resetExecutor": "Bas-belysning (3k 100% - alltid på)"
+    },
+
+    "randomExecutorMode": {
+      "enabled": false,
+      "_comment_enabled": "true = slumpmässig executor vid varje kast (för test)",
+      "page": 1,
+      "columns": { "min": 1, "max": 8 },
+      "rows": { "min": 1, "max": 7 }
+    }
+  },
+
+  "special_events": {
+    "180": {
+      "description": "3 dart = 180 poäng",
+      "enabled": true,
+      "lightshark_executors": [
+        { "page": 1, "column": 6, "row": 2 },
+        { "page": 1, "column": 7, "row": 2 }
+      ],
+      "_comment": "Flera executors triggas samtidigt (LED Ow Rnd Strobe + LED Speed x4)"
+    },
+    "finish": {
+      "description": "Spelet avslutat",
+      "enabled": false,
+      "lightshark_executor": { "page": 1, "column": 1, "row": 5 }
+    }
+  },
+
+  "logging": {
+    "enabled": true,
+    "logFile": "dart-events.log",
+    "consoleOutput": true
+  },
+
+  "_comment_executors": "Executors adresseras med page/column/row som motsvarar LightShark-griddet",
+  "_comment_osc": "OSC-adress: /LS/Executor/{page}/{column}/{row} med värde 0.0 (toggle)"
+}

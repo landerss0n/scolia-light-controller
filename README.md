@@ -1,0 +1,138 @@
+# Scolia Light Controller
+
+Styr LightShark-belysning i realtid baserat på Scolia darttavla-events via OSC.
+
+## Funktioner
+
+- **Färgläge (Color Mode)** - LED-färger matchar darttavlans färger:
+  - Dubbel/Trippel på röda segment (20,18,13,10,2,3,7,8,14,12) → LED Red
+  - Dubbel/Trippel på gröna segment (1,4,6,15,17,19,16,11,9,5) → LED Green
+  - Bullseye (50p) → LED Red
+  - Bull (25p) → LED Green
+  - Singel → Neutral (3k 100%)
+  - Miss → Lampor släcks
+- **Auto-reset** - Lampor återgår till 3k 100% när pilar tas ut
+- **Random Executor Mode** - Slumpmässig executor vid varje kast (för test)
+- **180 Detection** - Special-effekt vid 180 poäng
+
+## Snabbstart
+
+```bash
+# Installera dependencies
+npm install
+
+# Starta live-läge (kräver Scolia access token)
+npm start
+
+# Testa utan darttavla
+npm run simulate
+
+# Testa LightShark-anslutning
+npm test
+```
+
+## Konfiguration
+
+Redigera `config.json`:
+
+### Scolia-inställningar
+```json
+"scolia": {
+  "serialNumber": "DITT-SERIENUMMER",
+  "accessToken": "DIN-ACCESS-TOKEN",
+  "simulationMode": false
+}
+```
+
+### LightShark-inställningar
+```json
+"lightshark": {
+  "enabled": true,
+  "ip": "192.168.6.242",
+  "oscPort": 8000,
+  "throwEffect": {
+    "enabled": true,
+    "colorMode": {
+      "enabled": true,
+      "redExecutor": { "page": 1, "column": 2, "row": 1 },
+      "greenExecutor": { "page": 1, "column": 2, "row": 2 }
+    },
+    "noScoreExecutor": { "page": 1, "column": 8, "row": 4 }
+  }
+}
+```
+
+### Executor-koordinater
+
+Executors adresseras med `page`, `column`, `row` som motsvarar LightShark-griddet:
+
+| Executor | Page | Column | Row | Beskrivning |
+|----------|------|--------|-----|-------------|
+| 3k 100% | 1 | 1 | 1 | Bas-belysning (alltid på) |
+| LED Red | 1 | 2 | 1 | Röd färg |
+| LED Green | 1 | 2 | 2 | Grön färg |
+| Disco | 1 | 1 | 5 | Disco-effekt |
+| LED Dim OFF | 1 | 8 | 4 | Släcker lampor |
+
+## Filstruktur
+
+```
+Scolia API/
+├── index.js              # Huvudapp - WebSocket till Scolia, OSC till LightShark
+├── simulator.js          # Testa ljuseffekter utan darttavla
+├── test-connection.js    # Testa LightShark-anslutning
+├── config.json           # Konfiguration
+├── lib/
+│   ├── lightshark.js     # OSC-kommunikation med LightShark
+│   ├── mapper.js         # Dart → Ljus mappning (fallback)
+│   └── logger.js         # Loggning
+└── CLAUDE.md             # Projektkontext för AI-assistans
+```
+
+## Protokoll
+
+- **Scolia** → WebSocket (wss://game.scoliadarts.com)
+- **LightShark** → OSC/UDP (port 8000)
+
+## Användning
+
+### Live-läge
+```bash
+npm start
+```
+Ansluter till Scolia och triggar ljuseffekter vid varje kast.
+
+### Simulator
+```bash
+npm run simulate
+```
+Meny för att simulera kast och testa ljuseffekter.
+
+### Anslutningstest
+```bash
+npm test
+```
+Testar att LightShark är nåbar via OSC.
+
+## Felsökning
+
+### LightShark svarar inte
+1. Kontrollera IP-adress i `config.json`
+2. Verifiera att OSC är aktiverat i LightShark (Settings → Network → OSC)
+3. Kör `npm test` för att testa anslutningen
+
+### Scolia-anslutning misslyckas
+1. Kontrollera `serialNumber` och `accessToken` i `config.json`
+2. Verifiera att darttavlan är online
+3. Kontrollera internetanslutning
+
+### Lampor tänds inte
+1. Verifiera executor-koordinater (page/column/row)
+2. Kontrollera att executorn finns och är aktiv i LightShark
+3. Testa med simulatorn först
+
+## Systemkrav
+
+- Node.js v18+
+- LightShark med OSC aktiverat
+- Scolia darttavla med API-access

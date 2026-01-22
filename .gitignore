@@ -1,0 +1,8 @@
+node_modules/
+dart-events.log
+*.log
+.env
+.DS_Store
+config.json
+.claude/
+*.pdf

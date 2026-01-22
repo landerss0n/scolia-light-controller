@@ -1,0 +1,206 @@
+#!/usr/bin/env node
+
+const readline = require('readline');
+const fs = require('fs');
+const { LightSharkController } = require('./lib/lightshark');
+const { DartEventMapper } = require('./lib/mapper');
+const { Logger } = require('./lib/logger');
+
+// Ladda konfiguration
+const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
+
+// Initiera komponenter
+const logger = new Logger({ enabled: false, consoleOutput: true });
+const lightshark = config.lightshark.enabled ? new LightSharkController(config.lightshark, logger) : null;
+const mapper = new DartEventMapper(config.mapping, config.special_events, logger);
+
+// Random executor helper
+function getRandomExecutor() {
+  const randConfig = config.lightshark.randomExecutorMode;
+  if (!randConfig) return { page: 1, column: 1, row: 1 };
+
+  const page = randConfig.page || 1;
+  const col = Math.floor(Math.random() * (randConfig.columns.max - randConfig.columns.min + 1)) + randConfig.columns.min;
+  const row = Math.floor(Math.random() * (randConfig.rows.max - randConfig.rows.min + 1)) + randConfig.rows.min;
+
+  return { page, column: col, row };
+}
+
+console.log(`
+╔═══════════════════════════════════════════════╗
+║     SCOLIA DART SIMULATOR v1.0                ║
+║     Testa ljuseffekter utan darttavla         ║
+╚═══════════════════════════════════════════════╝
+`);
+
+// Fördefinierade kast att simulera
+const simulatedThrows = [
+  { name: 'Bull\'s Eye', points: 50, multiplier: 1, segment: 25, color: '🟡' },
+  { name: 'Triple 20', points: 60, multiplier: 3, segment: 20, color: '🟢' },
+  { name: 'Triple 19', points: 57, multiplier: 3, segment: 19, color: '🟢' },
+  { name: 'Double 20', points: 40, multiplier: 2, segment: 20, color: '🔵' },
+  { name: 'Double 16', points: 32, multiplier: 2, segment: 16, color: '🔵' },
+  { name: 'Single 20', points: 20, multiplier: 1, segment: 20, color: '⚪' },
+  { name: 'Single 15', points: 15, multiplier: 1, segment: 15, color: '⚪' },
+  { name: 'Single 5', points: 5, multiplier: 1, segment: 5, color: '⚪' },
+  { name: 'Miss (0p)', points: 0, multiplier: 0, segment: 0, color: '🔴' },
+];
+
+async function testConnections() {
+  console.log('Testar anslutningar...\n');
+
+  if (lightshark) {
+    const lsOk = await lightshark.testConnection();
+    if (lsOk) {
+      console.log('✓ LightShark: Ansluten');
+    } else {
+      console.log('✗ LightShark: Kan inte ansluta - kontrollera IP/port i config.json');
+    }
+  } else {
+    console.log('○ LightShark: Inaktiverad');
+  }
+
+  console.log('');
+}
+
+function showMenu() {
+  console.log('═══════════════════════════════════════════════');
+  console.log('Välj kast att simulera:\n');
+
+  simulatedThrows.forEach((throwData, index) => {
+    console.log(`  ${index + 1}. ${throwData.color} ${throwData.name.padEnd(20)} (${throwData.points}p)`);
+  });
+
+  console.log(`\n  ${simulatedThrows.length + 1}. 🎯 Simulera 180 (3x T20)`);
+  console.log(`  ${simulatedThrows.length + 2}. 🎲 Random Executor Test (10 kast)`);
+  console.log(`  ${simulatedThrows.length + 3}. 📋 Visa ljusmappningar`);
+  console.log(`  0. ❌ Avsluta\n`);
+  console.log('═══════════════════════════════════════════════');
+}
+
+function simulateThrow(throwData) {
+  const { points, multiplier, segment, name } = throwData;
+
+  console.log('\n🎯 ═══════════════════════════════════════');
+  console.log(`   SIMULERAT KAST: ${name}`);
+  console.log(`   Sektor: ${segment} | Multiplikator: ${multiplier}x`);
+  console.log(`   Poäng: ${points}`);
+  console.log('═══════════════════════════════════════\n');
+
+  // Mappa till ljuseffekt
+  const mapping = mapper.mapThrowToEffect(points, multiplier, segment);
+
+  if (mapping) {
+    console.log(`💡 Triggar effekt: ${mapping.description}`);
+
+    if (lightshark && mapping.lightshark_executor) {
+      const exec = mapping.lightshark_executor;
+      console.log(`   → LightShark Executor ${exec.page}/${exec.column}/${exec.row}`);
+      lightshark.triggerExecutor(exec.page, exec.column, exec.row);
+    }
+  } else {
+    console.log('⚠️  Ingen ljusmappning hittades för detta kast');
+  }
+
+  console.log('');
+}
+
+function simulate180() {
+  console.log('\n🔥🔥🔥 SIMULERAR 180! 🔥🔥🔥\n');
+
+  // Simulera 3x Triple 20
+  for (let i = 0; i < 3; i++) {
+    setTimeout(() => {
+      const t20 = simulatedThrows.find(t => t.name === 'Triple 20');
+      simulateThrow(t20);
+
+      if (i === 2) {
+        // Trigga special 180-effekt
+        setTimeout(() => {
+          console.log('🎆 SPECIAL EFFEKT: 180! 🎆\n');
+          if (lightshark && config.special_events['180'].enabled) {
+            const exec = config.special_events['180'].lightshark_executor;
+            if (exec) {
+              lightshark.triggerExecutor(exec.page, exec.column, exec.row);
+            }
+          }
+        }, 500);
+      }
+    }, i * 1000);
+  }
+}
+
+function simulateRandomExecutorTest() {
+  console.log('\n🎲 ═══════════════════════════════════════');
+  console.log('   RANDOM EXECUTOR TEST - 10 kast');
+  console.log('═══════════════════════════════════════\n');
+
+  const randConfig = config.lightshark.randomExecutorMode;
+  if (!randConfig) {
+    console.log('Random executor mode är inte konfigurerat i config.json');
+    return;
+  }
+
+  console.log(`   Page: ${randConfig.page}`);
+  console.log(`   Kolumner: ${randConfig.columns.min}-${randConfig.columns.max}`);
+  console.log(`   Rader: ${randConfig.rows.min}-${randConfig.rows.max}\n`);
+
+  for (let i = 0; i < 10; i++) {
+    setTimeout(() => {
+      const randExec = getRandomExecutor();
+      console.log(`   Kast ${i + 1}/10: Executor Page ${randExec.page}, Col ${randExec.column}, Row ${randExec.row}`);
+
+      if (lightshark) {
+        lightshark.triggerExecutor(randExec.page, randExec.column, randExec.row);
+      }
+
+      if (i === 9) {
+        console.log('\n   Random Executor Test klart!\n');
+      }
+    }, i * 1500);
+  }
+}
+
+async function main() {
+  await testConnections();
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  const askQuestion = () => {
+    showMenu();
+
+    rl.question('Välj (0-' + (simulatedThrows.length + 3) + '): ', (answer) => {
+      const choice = parseInt(answer);
+
+      if (choice === 0) {
+        console.log('\nAvslutar simulator. Hejdå! 👋\n');
+        rl.close();
+        return;
+      }
+
+      if (choice >= 1 && choice <= simulatedThrows.length) {
+        simulateThrow(simulatedThrows[choice - 1]);
+        setTimeout(askQuestion, 1000);
+      } else if (choice === simulatedThrows.length + 1) {
+        simulate180();
+        setTimeout(askQuestion, 4000);
+      } else if (choice === simulatedThrows.length + 2) {
+        simulateRandomExecutorTest();
+        setTimeout(askQuestion, 16000);
+      } else if (choice === simulatedThrows.length + 3) {
+        mapper.listMappings();
+        setTimeout(askQuestion, 500);
+      } else {
+        console.log('Ogiltigt val, försök igen.\n');
+        askQuestion();
+      }
+    });
+  };
+
+  askQuestion();
+}
+
+main();

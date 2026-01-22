@@ -1,0 +1,129 @@
+╔═══════════════════════════════════════════════════════════╗
+║                                                           ║
+║   SCOLIA LIGHT CONTROLLER - SNABBSTART                    ║
+║                                                           ║
+╚═══════════════════════════════════════════════════════════╝
+
+
+STEG 1: INSTALLERA NODE.JS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Gå till: https://nodejs.org/
+2. Ladda ner LTS-versionen
+3. Installera (klicka bara "Next")
+4. Starta om datorn
+
+
+STEG 2: INSTALLERA APPEN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Dubbelklicka på: install.bat
+
+
+STEG 3: KONFIGURERA LIGHTSHARK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Aktivera OSC i LightShark:
+   Settings → Network → OSC → Enable
+
+2. Notera LightShark IP-adress:
+   Settings → Network → IP Address
+
+3. Öppna config.json i Notepad och ändra:
+
+   "lightshark": {
+     "ip": "192.168.6.242",     ← LightShark IP
+     "oscPort": 8000,           ← OSC port (standard 8000)
+     ...
+   }
+
+4. Spara filen
+
+
+STEG 4: TESTA ANSLUTNING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Dubbelklicka på: test-connection.bat
+
+→ Om OK: "LightShark: Ansluten"
+→ Om FEL: Kolla IP-adress och att OSC är aktiverat
+
+
+STEG 5: TESTA LJUSEFFEKTER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Dubbelklicka på: simulator.bat
+
+→ Välj ett kast (t.ex. "1" för Bull's Eye)
+→ Ljuset ska triggas!
+
+
+STEG 6: KÖR LIVE (när ni har access token)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Öppna config.json
+2. Lägg in era Scolia-uppgifter:
+
+   "scolia": {
+     "serialNumber": "DITT-SERIENUMMER",
+     "accessToken": "DIN-ACCESS-TOKEN",
+     "simulationMode": false
+   }
+
+3. Dubbelklicka på: start.bat
+
+→ Nu lyssnar appen på riktiga dartkast!
+
+
+HUR DET FUNGERAR
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Färgläge (precis som en darttavla):
+  - Dubbel/Trippel på RÖTT segment → LED Red
+  - Dubbel/Trippel på GRÖNT segment → LED Green
+  - Bullseye (50p) → LED Red
+  - Bull (25p) → LED Green
+  - Singel → Neutral belysning (3k 100%)
+  - Miss → Lampor släcks
+
+Lamporna återställs automatiskt när pilarna tas ut.
+
+
+EXECUTOR-KONFIGURATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Executors anges med page/column/row i config.json:
+
+"colorMode": {
+  "redExecutor": { "page": 1, "column": 2, "row": 1 },
+  "greenExecutor": { "page": 1, "column": 2, "row": 2 }
+}
+
+Ändra koordinaterna om era executors ligger på annan plats.
+
+
+FELSÖKNING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Problem: "Node.js är inte installerat"
+  → Installera från https://nodejs.org/ och starta om datorn
+
+Problem: "LightShark anslutning misslyckades"
+  → Kolla IP-adress i config.json
+  → Aktivera OSC i LightShark (Settings → Network → OSC)
+  → Testa: ping 192.168.X.X (från kommandotolken)
+
+Problem: Lampor triggas inte
+  → Kolla att executor-koordinater stämmer (page/column/row)
+  → Testa executorn manuellt i LightShark
+  → Kör simulator.bat för att testa
+
+
+FILER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+install.bat          Installerar dependencies
+test-connection.bat  Testar LightShark-anslutning
+simulator.bat        Testar ljus utan darttavla
+start.bat            Startar live-läge
+config.json          Inställningar (redigera denna!)
+README.md            Fullständig dokumentation
+
+
+KONTAKT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Scolia: https://scoliadarts.com/
+Node.js: https://nodejs.org/
+
+
+Lycka till! 🎯💡
