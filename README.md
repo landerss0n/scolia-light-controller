@@ -11,6 +11,11 @@ Styr LightShark-belysning i realtid baserat på Scolia darttavla-events via OSC.
   - Bull (25p) → LED Green
   - Singel → Neutral (3k 100%)
   - Miss → Lampor släcks
+- **Ljudeffekter (Unreal Tournament-tema)** - Spelar ljud vid kast:
+  - Segment-specifika ljud för T20 (Godlike), T19 (Dominating), T18 (Unstoppable), T17 (Rampage)
+  - Generella ljud för dubblar (Double Kill), tripplar (Triple Kill)
+  - Bullseye → Headshot, Bull 25 → Ultrakill, Miss → Failed
+  - 180 → Monster Kill, Takeout → Prepare for Battle
 - **Auto-reset** - Lampor återgår till 3k 100% när pilar tas ut
 - **Random Executor Mode** - Slumpmässig executor vid varje kast (för test)
 - **180 Detection** - Special-effekt vid 180 poäng
@@ -62,6 +67,23 @@ Redigera `config.json`:
 }
 ```
 
+### Ljudeffekter
+```json
+"sound": {
+  "enabled": true,
+  "soundsDir": "./sounds",
+  "sounds": {
+    "miss": { "file": "failed.wav" },
+    "bullseye": { "file": "headshot.wav" },
+    "triple_20": { "file": "godlike.wav" },
+    "triple": { "file": "triplekill.wav" },
+    "180": { "file": "monsterkill.wav" }
+  }
+}
+```
+
+Segment-specifika ljud (t.ex. `triple_20`) har prioritet. Om inget segment-specifikt ljud finns faller det tillbaka till det generella (`triple`). Lägg egna WAV-filer i `sounds/`-mappen.
+
 ### Executor-koordinater
 
 Executors adresseras med `page`, `column`, `row` som motsvarar LightShark-griddet:
@@ -84,8 +106,10 @@ Scolia API/
 ├── config.json           # Konfiguration
 ├── lib/
 │   ├── lightshark.js     # OSC-kommunikation med LightShark
+│   ├── sound.js          # Ljuduppspelning (cross-platform)
 │   ├── mapper.js         # Dart → Ljus mappning (fallback)
 │   └── logger.js         # Loggning
+├── sounds/               # WAV-filer för ljudeffekter
 └── CLAUDE.md             # Projektkontext för AI-assistans
 ```
 
@@ -136,3 +160,4 @@ Testar att LightShark är nåbar via OSC.
 - Node.js v18+
 - LightShark med OSC aktiverat
 - Scolia darttavla med API-access
+- Ljud: macOS (afplay, inbyggt), Linux (aplay/mpg123), Windows (PowerShell, inbyggt)

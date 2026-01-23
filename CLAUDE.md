@@ -17,6 +17,7 @@ Detta dokument innehåller all kontext som behövs för att göra ändringar i p
 
 ```
 Scolia Darttavla → Scolia Cloud (WebSocket) → index.js → LightShark (OSC)
+                                                       → Ljud (play-sound / PowerShell)
 ```
 
 ## Viktiga filer
@@ -36,6 +37,12 @@ Scolia Darttavla → Scolia Cloud (WebSocket) → index.js → LightShark (OSC)
 ### lib/logger.js
 - Loggning till konsol och fil
 - Metoder: `info()`, `success()`, `warn()`, `error()`, `debug()`
+
+### lib/sound.js
+- Ljuduppspelning via `play-sound` (macOS/Linux) och PowerShell (Windows)
+- `playSound(eventName)` - Spelar ljud fire-and-forget
+- `playSoundWithFallback(specific, fallback)` - Försöker segment-specifikt ljud först (t.ex. `triple_20`), faller tillbaka till generellt (t.ex. `triple`)
+- Kräver WAV-filer i `sounds/`-mappen
 
 ### lib/mapper.js
 - Mappningslogik för dart → ljuseffekt (används som fallback)
@@ -156,6 +163,24 @@ Baserat på användarens setup:
       ]
     }
   },
+  "sound": {
+    "enabled": true,
+    "soundsDir": "./sounds",
+    "sounds": {
+      "miss": { "file": "failed.wav" },
+      "bullseye": { "file": "headshot.wav" },
+      "bull25": { "file": "ultrakill.wav" },
+      "double": { "file": "doublekill.wav" },
+      "triple": { "file": "triplekill.wav" },
+      "triple_20": { "file": "godlike.wav" },    // Segment-specifik
+      "triple_19": { "file": "dominating.wav" },
+      "triple_18": { "file": "unstoppable.wav" },
+      "triple_17": { "file": "rampage.wav" },
+      "180": { "file": "monsterkill.wav" },
+      "takeout": { "file": "prepare.wav" },
+      "winner": { "file": "winner.wav" }
+    }
+  },
   "mapping": { ... },           // Fallback om colorMode är av
   "logging": { ... }
 }
@@ -173,16 +198,46 @@ Redigera `colorMode` i `config.json`:
 - `redSegments` / `greenSegments` - Vilka segment som är röda/gröna
 - `redExecutor` / `greenExecutor` - Vilka executors som triggas
 
+### Lägga till nytt ljud
+1. Lägg WAV-fil i `sounds/`
+2. Lägg till mappning i `config.json` → `sound.sounds`
+3. Segment-specifika: namnge `{type}_{segment}` (t.ex. `double_20`)
+4. Trigga via `sound.playSound('eventName')` eller `sound.playSoundWithFallback('specific', 'fallback')`
+
 ### Lägga till nytt event
 1. Lägg till case i `handleScoliaMessage()` switch-sats
 2. Skapa handler-funktion vid behov
 
+## Ljudlogik
+
+Triggas parallellt med ljuseffekter (fire-and-forget) i `handleThrowDetected()`:
+
+```javascript
+// Prioritetsordning:
+1. Miss → 'miss' (failed.wav)
+2. Bullseye 50p → 'bullseye' (headshot.wav)
+3. Bull 25p → 'bull25' (ultrakill.wav)
+4. Trippel → 'triple_{segment}' med fallback till 'triple'
+5. Dubbel → 'double_{segment}' med fallback till 'double'
+```
+
+Segment-specifika ljud har prioritet via `playSoundWithFallback()`:
+- T20 → godlike, T19 → dominating, T18 → unstoppable, T17 → rampage
+- Övriga tripplar → triplekill (generellt)
+
+Special events:
+- 180 → monsterkill (triggas i `checkSpecialEvents()`)
+- Takeout → prepare (triggas i `TAKEOUT_FINISHED`)
+- Winner → winner (TODO: koppla till matchslut-event)
+
 ## Viktigt att veta
 
 1. **OSC är fire-and-forget** - Inget bekräftelsesvar från LightShark
-2. **Bull skickas som "Bull"** - Scolia skiljer inte på inner/outer i sektorn, vi använder koordinater (dist ≤ 7 = 50p)
-3. **3k 100% ska aldrig triggas manuellt** - Den är alltid på, andra executors skriver över
-4. **Executors är toggle-baserade** - Trigga samma executor två gånger = av. Kod förhindrar dubbel-toggle via `lastTriggeredExecutor`
+2. **Ljud är fire-and-forget** - Varje play() spawnar ny process, blockerar inte
+3. **Bull skickas som "Bull"** - Scolia skiljer inte på inner/outer i sektorn, vi använder koordinater (dist ≤ 7 = 50p)
+4. **3k 100% ska aldrig triggas manuellt** - Den är alltid på, andra executors skriver över
+5. **Executors är toggle-baserade** - Trigga samma executor två gånger = av. Kod förhindrar dubbel-toggle via `lastTriggeredExecutor`
+6. **Cross-platform ljud** - macOS: afplay, Linux: aplay/mpg123, Windows: PowerShell SoundPlayer
 
 ## Körning
 
