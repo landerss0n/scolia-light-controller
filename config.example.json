@@ -104,11 +104,26 @@
       "triple_19": { "file": "dominating.wav" },
       "triple_18": { "file": "unstoppable.wav" },
       "triple_17": { "file": "rampage.wav" },
-      "180": { "file": "monsterkill.wav" },
-      "takeout": { "file": "prepare.wav" },
-      "winner": { "file": "winner.wav" }
+      "180": { "file": "monsterkill.wav" }
     },
     "_comment_sounds": "Ljudfiler per event - lägg WAV i sounds/. Segment-specifika (t.ex. triple_20) har prioritet över generella (triple)"
+  },
+
+  "knx": {
+    "enabled": false,
+    "_comment_enabled": "true = styr KNX-belysning via IP-gateway",
+
+    "gateway": "192.168.1.50",
+    "_comment_gateway": "KNX IP-gateway adress",
+
+    "port": 3671,
+    "_comment_port": "KNX port (standard 3671)",
+
+    "actions": {
+      "allOff": [{ "ga": "0/0/1", "value": 5 }],
+      "allOn": [{ "ga": "0/0/1", "value": 0 }]
+    },
+    "_comment_actions": "Gruppaddresser och värden att skicka vid events. Miss → allOff, nästa poäng → allOn"
   },
 
   "logging": {

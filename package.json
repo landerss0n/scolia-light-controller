@@ -17,6 +17,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "knx": "^2.5.4",
     "node-osc": "^9.0.0",
     "play-sound": "^1.1.6",
     "ws": "^8.16.0"

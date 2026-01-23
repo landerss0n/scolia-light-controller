@@ -4,6 +4,7 @@ const WebSocket = require('ws');
 const fs = require('fs');
 const { LightSharkController } = require('./lib/lightshark');
 const { SoundController } = require('./lib/sound');
+const { KnxController } = require('./lib/knx');
 const { DartEventMapper } = require('./lib/mapper');
 const { Logger } = require('./lib/logger');
 
@@ -14,6 +15,8 @@ const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 const logger = new Logger(config.logging);
 const lightshark = config.lightshark.enabled ? new LightSharkController(config.lightshark, logger) : null;
 const sound = config.sound?.enabled ? new SoundController(config.sound, logger) : null;
+const knxController = config.knx?.enabled ? new KnxController(config.knx, logger) : null;
+let knxLightsOff = false; // Spårar om KNX-lampor är släckta (från miss)
 const mapper = new DartEventMapper(config.mapping, config.special_events, logger);
 
 let ws = null;
@@ -67,6 +70,10 @@ async function testConnections() {
     } else {
       logger.error('✗ LightShark anslutning misslyckades - kontrollera IP och port i config.json');
     }
+  }
+
+  if (knxController) {
+    await knxController.connect();
   }
 
   console.log('');
@@ -139,7 +146,7 @@ function handleScoliaMessage(message) {
 
     case 'SBC_STATUS':
     case 'SBC_STATUS_CHANGED':
-      logger.info(`SBC Status: ${message.payload.status} | Phase: ${message.payload.phase || 'N/A'}`);
+      logger.info(`SBC Status: ${JSON.stringify(message.payload)}`);
       break;
 
     case 'THROW_DETECTED':
@@ -152,7 +159,6 @@ function handleScoliaMessage(message) {
 
     case 'TAKEOUT_FINISHED':
       logger.info('✓ Pilar uttagna, redo för nästa kast');
-      if (sound) sound.playSound('takeout');
       // Släck senaste executor (färg eller off) så 3k 100% syns igen
       if (lightshark && lastTriggeredExecutor) {
         logger.info(`↩️  Släcker executor: Page ${lastTriggeredExecutor.page}, Col ${lastTriggeredExecutor.column}, Row ${lastTriggeredExecutor.row}`);
@@ -332,6 +338,17 @@ function handleThrowDetected(payload) {
     }
   }
 
+  // KNX: släck alla vid miss, tänd vid nästa poängkast
+  if (knxController) {
+    if (points === 0) {
+      knxController.triggerAction('allOff');
+      knxLightsOff = true;
+    } else if (knxLightsOff) {
+      knxController.triggerAction('allOn');
+      knxLightsOff = false;
+    }
+  }
+
   // Kolla special events (180, finish, etc) — returnerar true om special-ljud spelades
   const specialPlayed = checkSpecialEvents();
 
@@ -429,6 +446,7 @@ process.on('SIGINT', () => {
   logger.info('Stänger av...');
 
   if (ws) ws.close();
+  if (knxController) knxController.disconnect();
   if (reconnectTimeout) clearTimeout(reconnectTimeout);
 
   process.exit(0);
