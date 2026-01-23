@@ -33,17 +33,17 @@ async function testLightShark() {
     console.log('OBS: OSC är "fire-and-forget" - vi kan inte bekräfta att');
     console.log('LightShark tog emot meddelandet. Kontrollera att enheten är på.\n');
 
-    console.log('Vill du testa att trigga en cuelist? (Testar cuelist 1)');
+    console.log('Vill du testa att trigga executor 1/1/1 (3k 100%)? ');
     console.log('Tryck Enter för att testa, eller Ctrl+C för att avsluta...\n');
 
     process.stdin.once('data', async () => {
-      console.log('Triggar cuelist 1 via OSC...\n');
-      const success = await lightshark.triggerCuelist(1);
+      console.log('Triggar executor 1/1/1 via OSC...\n');
+      const success = await lightshark.triggerExecutor(1, 1, 1);
 
       if (success) {
-        console.log('✅ OSC-meddelande skickat till cuelist 1!');
+        console.log('✅ OSC-meddelande skickat till executor 1/1/1!');
         console.log('   Om ljuset inte ändrades, kontrollera:');
-        console.log('   - Att cuelist 1 existerar i LightShark');
+        console.log('   - Att executorn finns i LightShark');
         console.log('   - Att LightShark inte är lockad');
         console.log('   - Att OSC är aktiverat (Settings → Network → OSC)\n');
       } else {

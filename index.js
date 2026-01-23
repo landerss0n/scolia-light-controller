@@ -5,7 +5,6 @@ const fs = require('fs');
 const { LightSharkController } = require('./lib/lightshark');
 const { SoundController } = require('./lib/sound');
 const { KnxController } = require('./lib/knx');
-const { DartEventMapper } = require('./lib/mapper');
 const { Logger } = require('./lib/logger');
 
 // Ladda konfiguration
@@ -17,7 +16,6 @@ const lightshark = config.lightshark.enabled ? new LightSharkController(config.l
 const sound = config.sound?.enabled ? new SoundController(config.sound, logger) : null;
 const knxController = config.knx?.enabled ? new KnxController(config.knx, logger) : null;
 let knxLightsOff = false; // Spårar om KNX-lampor är släckta (från miss)
-const mapper = new DartEventMapper(config.mapping, config.special_events, logger);
 
 let ws = null;
 let reconnectTimeout = null;
@@ -327,25 +325,11 @@ function handleThrowDetected(payload) {
       knxLightsOff = false;
     }
   } else if (config.lightshark.randomExecutorMode?.enabled) {
-    // Random executor mode
+    // Random executor mode (för test)
     const randExec = getRandomExecutor();
     logger.info(`🎲 RANDOM MODE: Triggar executor Page ${randExec.page}, Col ${randExec.column}, Row ${randExec.row}`);
     if (lightshark) {
       lightshark.triggerExecutor(randExec.page, randExec.column, randExec.row);
-    }
-  } else {
-    // Mappa till ljuseffekt (normalt läge)
-    const mapping = mapper.mapThrowToEffect(points, multiplier, segment);
-
-    if (mapping) {
-      logger.info(`💡 Triggar effekt: ${mapping.description}`);
-      triggerLightEffect(mapping);
-    } else {
-      // Fallback: trigga LED Red på alla kast utan mappning
-      logger.warn('Ingen mappning - triggar fallback (LED Red)');
-      if (lightshark) {
-        lightshark.triggerExecutor(1, 2, 1);
-      }
     }
   }
 
@@ -377,14 +361,6 @@ function handleThrowDetected(payload) {
   }
 
   console.log('');
-}
-
-// Trigga ljuseffekt
-function triggerLightEffect(mapping) {
-  if (lightshark && mapping.lightshark_executor) {
-    const exec = mapping.lightshark_executor;
-    lightshark.triggerExecutor(exec.page, exec.column, exec.row);
-  }
 }
 
 // Kolla special events - returnerar true om special-ljud spelades

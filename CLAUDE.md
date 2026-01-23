@@ -54,10 +54,6 @@ KNX IP-gateway ──extern länk──→ LightShark (KNX allOff/allOn påverka
 - `triggerAction(actionName)` - Kör namngiven action från config (t.ex. 'allOff', 'allOn')
 - `disconnect()` - Koppla ner
 
-### lib/mapper.js
-- Mappningslogik för dart → ljuseffekt (används som fallback)
-- Läser `mapping`-sektionen i config.json
-- **OBS:** Används inte i nuvarande colorMode-läge
 
 ## Nuvarande ljuslogik (colorMode)
 
@@ -207,7 +203,6 @@ Baserat på användarens setup:
       "allOn": [{ "ga": "0/0/1", "value": 0 }]    // Tänder alla lampor
     }
   },
-  "mapping": { ... },           // Fallback om colorMode är av
   "logging": { ... }
 }
 ```

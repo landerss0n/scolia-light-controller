@@ -127,7 +127,6 @@ Scolia API/
 │   ├── lightshark.js     # OSC-kommunikation med LightShark
 │   ├── knx.js            # KNX IP-gateway kommunikation
 │   ├── sound.js          # Ljuduppspelning (cross-platform)
-│   ├── mapper.js         # Dart → Ljus mappning (fallback)
 │   └── logger.js         # Loggning
 ├── sounds/               # WAV-filer för ljudeffekter
 └── CLAUDE.md             # Projektkontext för AI-assistans
