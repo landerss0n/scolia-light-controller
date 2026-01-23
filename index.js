@@ -159,6 +159,11 @@ function handleScoliaMessage(message) {
 
     case 'TAKEOUT_FINISHED':
       logger.info('✓ Pilar uttagna, redo för nästa kast');
+      // Tänd KNX-lampor om de var släckta (miss)
+      if (knxController && knxLightsOff) {
+        knxController.triggerAction('allOn');
+        knxLightsOff = false;
+      }
       // Släck senaste executor (färg eller off) så 3k 100% syns igen
       if (lightshark && lastTriggeredExecutor) {
         logger.info(`↩️  Släcker executor: Page ${lastTriggeredExecutor.page}, Col ${lastTriggeredExecutor.column}, Row ${lastTriggeredExecutor.row}`);
@@ -242,8 +247,8 @@ function handleThrowDetected(payload) {
     let execToTrigger = null;
     let effectName = '';
 
-    // Noscore (miss) - släck lamporna
-    if (points === 0 && effect.noScoreExecutor) {
+    // Noscore (miss) - KNX hanterar släckning om aktivt, annars LightShark
+    if (points === 0 && !knxController) {
       execToTrigger = effect.noScoreExecutor;
       effectName = '❌ NOSCORE! Släcker lampor';
     }
