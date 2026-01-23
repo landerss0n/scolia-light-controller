@@ -320,6 +320,12 @@ function handleThrowDetected(payload) {
         lastTriggeredExecutor = execToTrigger;
       }
     }
+
+    // KNX: återställ lampor vid singel/icke-färg-kast efter miss (färger funkar utan allOn)
+    if (knxController && knxLightsOff && points > 0 && !execToTrigger) {
+      knxController.triggerAction('allOn');
+      knxLightsOff = false;
+    }
   } else if (config.lightshark.randomExecutorMode?.enabled) {
     // Random executor mode
     const randExec = getRandomExecutor();
@@ -343,15 +349,11 @@ function handleThrowDetected(payload) {
     }
   }
 
-  // KNX: släck alla vid miss, tänd vid nästa poängkast
-  if (knxController) {
-    if (points === 0) {
-      knxController.triggerAction('allOff');
-      knxLightsOff = true;
-    } else if (knxLightsOff) {
-      knxController.triggerAction('allOn');
-      knxLightsOff = false;
-    }
+  // KNX: släck alla vid miss
+  if (knxController && points === 0) {
+    knxController.triggerAction('allOff');
+    knxLightsOff = true;
+    lastTriggeredExecutor = null;
   }
 
   // Kolla special events (180, finish, etc) — returnerar true om special-ljud spelades
