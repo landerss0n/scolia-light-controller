@@ -4,7 +4,6 @@ const readline = require('readline');
 const fs = require('fs');
 const { LightSharkController } = require('./lib/lightshark');
 const { SoundController } = require('./lib/sound');
-const { DartEventMapper } = require('./lib/mapper');
 const { Logger } = require('./lib/logger');
 
 // Ladda konfiguration
@@ -14,7 +13,8 @@ const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 const logger = new Logger({ enabled: false, consoleOutput: true });
 const lightshark = config.lightshark.enabled ? new LightSharkController(config.lightshark, logger) : null;
 const sound = config.sound?.enabled ? new SoundController(config.sound, logger) : null;
-const mapper = new DartEventMapper(config.mapping, config.special_events, logger);
+
+let lastTriggeredExecutor = null;
 
 // Random executor helper
 function getRandomExecutor() {
@@ -37,15 +37,16 @@ console.log(`
 
 // Fördefinierade kast att simulera
 const simulatedThrows = [
-  { name: 'Bull\'s Eye', points: 50, multiplier: 1, segment: 25, color: '🟡' },
-  { name: 'Triple 20', points: 60, multiplier: 3, segment: 20, color: '🟢' },
+  { name: 'Bull\'s Eye (50p)', points: 50, multiplier: 2, segment: 25, color: '🟡' },
+  { name: 'Bull (25p)', points: 25, multiplier: 1, segment: 25, color: '🟢' },
+  { name: 'Triple 20', points: 60, multiplier: 3, segment: 20, color: '🔴' },
   { name: 'Triple 19', points: 57, multiplier: 3, segment: 19, color: '🟢' },
-  { name: 'Double 20', points: 40, multiplier: 2, segment: 20, color: '🔵' },
-  { name: 'Double 16', points: 32, multiplier: 2, segment: 16, color: '🔵' },
+  { name: 'Triple 18', points: 54, multiplier: 3, segment: 18, color: '🔴' },
+  { name: 'Double 20', points: 40, multiplier: 2, segment: 20, color: '🔴' },
+  { name: 'Double 16', points: 32, multiplier: 2, segment: 16, color: '🟢' },
   { name: 'Single 20', points: 20, multiplier: 1, segment: 20, color: '⚪' },
-  { name: 'Single 15', points: 15, multiplier: 1, segment: 15, color: '⚪' },
   { name: 'Single 5', points: 5, multiplier: 1, segment: 5, color: '⚪' },
-  { name: 'Miss (0p)', points: 0, multiplier: 0, segment: 0, color: '🔴' },
+  { name: 'Miss (0p)', points: 0, multiplier: 0, segment: 0, color: '❌' },
 ];
 
 async function testConnections() {
@@ -75,7 +76,6 @@ function showMenu() {
 
   console.log(`\n  ${simulatedThrows.length + 1}. 🎯 Simulera 180 (3x T20)`);
   console.log(`  ${simulatedThrows.length + 2}. 🎲 Random Executor Test (10 kast)`);
-  console.log(`  ${simulatedThrows.length + 3}. 📋 Visa ljusmappningar`);
   console.log(`  0. ❌ Avsluta\n`);
   console.log('═══════════════════════════════════════════════');
 }
@@ -89,19 +89,60 @@ function simulateThrow(throwData) {
   console.log(`   Poäng: ${points}`);
   console.log('═══════════════════════════════════════\n');
 
-  // Mappa till ljuseffekt
-  const mapping = mapper.mapThrowToEffect(points, multiplier, segment);
+  // ColorMode ljuslogik (samma som index.js)
+  if (config.lightshark.throwEffect?.enabled && lightshark) {
+    const effect = config.lightshark.throwEffect;
+    let execToTrigger = null;
+    let effectName = '';
 
-  if (mapping) {
-    console.log(`💡 Triggar effekt: ${mapping.description}`);
+    if (points === 0 && effect.noScoreExecutor) {
+      execToTrigger = effect.noScoreExecutor;
+      effectName = '❌ NOSCORE - Släcker lampor';
+    } else if (effect.colorMode?.enabled) {
+      const cm = effect.colorMode;
 
-    if (lightshark && mapping.lightshark_executor) {
-      const exec = mapping.lightshark_executor;
-      console.log(`   → LightShark Executor ${exec.page}/${exec.column}/${exec.row}`);
-      lightshark.triggerExecutor(exec.page, exec.column, exec.row);
+      if (points === 50) {
+        execToTrigger = cm.bullseyeExecutor || cm.redExecutor;
+        effectName = '🎯 BULLSEYE 50! Moln Ow Strobe';
+      } else if (points === 25 && segment === 25) {
+        execToTrigger = cm.bull25 === 'green' ? cm.greenExecutor : cm.redExecutor;
+        effectName = `🎯 BULL 25! LED ${cm.bull25 === 'green' ? 'Green' : 'Red'}`;
+      } else if ((multiplier === 2 || multiplier === 3) && cm.redSegments.includes(segment)) {
+        execToTrigger = cm.redExecutor;
+        const typeStr = multiplier === 3 ? 'TRIPPEL' : 'DUBBEL';
+        effectName = `🔴 ${typeStr} ${segment} - LED Red`;
+      } else if ((multiplier === 2 || multiplier === 3) && cm.greenSegments.includes(segment)) {
+        execToTrigger = cm.greenExecutor;
+        const typeStr = multiplier === 3 ? 'TRIPPEL' : 'DUBBEL';
+        effectName = `🟢 ${typeStr} ${segment} - LED Green`;
+      } else if (multiplier === 1) {
+        if (lastTriggeredExecutor) {
+          console.log(`⚪ SINGEL ${segment} - Släcker senaste färg`);
+          lightshark.triggerExecutor(lastTriggeredExecutor.page, lastTriggeredExecutor.column, lastTriggeredExecutor.row);
+          lastTriggeredExecutor = null;
+        } else {
+          console.log(`⚪ SINGEL ${segment} - (3k 100% redan på)`);
+        }
+      }
     }
-  } else {
-    console.log('⚠️  Ingen ljusmappning hittades för detta kast');
+
+    if (execToTrigger) {
+      const sameAsLast = lastTriggeredExecutor &&
+        lastTriggeredExecutor.page === execToTrigger.page &&
+        lastTriggeredExecutor.column === execToTrigger.column &&
+        lastTriggeredExecutor.row === execToTrigger.row;
+
+      if (sameAsLast) {
+        console.log(`${effectName} (redan aktiv, skippar)`);
+      } else {
+        if (lastTriggeredExecutor) {
+          lightshark.triggerExecutor(lastTriggeredExecutor.page, lastTriggeredExecutor.column, lastTriggeredExecutor.row);
+        }
+        console.log(`💡 ${effectName}: Page ${execToTrigger.page}, Col ${execToTrigger.column}, Row ${execToTrigger.row}`);
+        lightshark.triggerExecutor(execToTrigger.page, execToTrigger.column, execToTrigger.row);
+        lastTriggeredExecutor = execToTrigger;
+      }
+    }
   }
 
   // Trigga ljud
@@ -191,7 +232,7 @@ async function main() {
   const askQuestion = () => {
     showMenu();
 
-    rl.question('Välj (0-' + (simulatedThrows.length + 3) + '): ', (answer) => {
+    rl.question('Välj (0-' + (simulatedThrows.length + 2) + '): ', (answer) => {
       const choice = parseInt(answer);
 
       if (choice === 0) {
@@ -209,9 +250,6 @@ async function main() {
       } else if (choice === simulatedThrows.length + 2) {
         simulateRandomExecutorTest();
         setTimeout(askQuestion, 16000);
-      } else if (choice === simulatedThrows.length + 3) {
-        mapper.listMappings();
-        setTimeout(askQuestion, 500);
       } else {
         console.log('Ogiltigt val, försök igen.\n');
         askQuestion();
