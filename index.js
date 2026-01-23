@@ -227,11 +227,18 @@ function handleThrowDetected(payload) {
     }
   }
 
+  // Bounceout = pilen fastnade inte, räknas som miss
+  if (bounceout) {
+    points = 0;
+    multiplier = 0;
+    segment = 0;
+  }
+
   logger.info('');
   logger.info('🎯 ═══════════════════════════════════════');
   logger.info(`   KAST DETEKTERAT!`);
   logger.info(`   Sektor: ${sector} | Segment: ${segment} | ${multiplier}x`);
-  logger.info(`   Poäng: ${points}${bounceout ? ' (BOUNCEOUT)' : ''}`);
+  logger.info(`   Poäng: ${points}${bounceout ? ' (BOUNCEOUT - räknas som miss)' : ''}`);
   logger.info(`   Position: (${coordinates?.[0] || 0}, ${coordinates?.[1] || 0})`);
   logger.info('═══════════════════════════════════════');
 
