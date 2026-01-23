@@ -95,14 +95,20 @@
     "_comment_soundsDir": "Mapp med ljudfiler (relativ till projektrot)",
 
     "sounds": {
-      "bullseye": { "file": "bullseye.wav" },
-      "bull25": { "file": "bull25.wav" },
-      "180": { "file": "180.wav" },
-      "miss": { "file": "miss.wav" },
-      "double": { "file": "double.wav" },
-      "triple": { "file": "triple.wav" }
+      "miss": { "file": "failed.wav" },
+      "bullseye": { "file": "headshot.wav" },
+      "bull25": { "file": "ultrakill.wav" },
+      "double": { "file": "doublekill.wav" },
+      "triple": { "file": "triplekill.wav" },
+      "triple_20": { "file": "godlike.wav" },
+      "triple_19": { "file": "dominating.wav" },
+      "triple_18": { "file": "unstoppable.wav" },
+      "triple_17": { "file": "rampage.wav" },
+      "180": { "file": "monsterkill.wav" },
+      "takeout": { "file": "prepare.wav" },
+      "winner": { "file": "winner.wav" }
     },
-    "_comment_sounds": "Ljudfiler per event - lägg WAV-filer i sounds/-mappen"
+    "_comment_sounds": "Ljudfiler per event - lägg WAV i sounds/. Segment-specifika (t.ex. triple_20) har prioritet över generella (triple)"
   },
 
   "logging": {

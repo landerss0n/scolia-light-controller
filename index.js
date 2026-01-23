@@ -152,6 +152,7 @@ function handleScoliaMessage(message) {
 
     case 'TAKEOUT_FINISHED':
       logger.info('✓ Pilar uttagna, redo för nästa kast');
+      if (sound) sound.playSound('takeout');
       // Släck senaste executor (färg eller off) så 3k 100% syns igen
       if (lightshark && lastTriggeredExecutor) {
         logger.info(`↩️  Släcker executor: Page ${lastTriggeredExecutor.page}, Col ${lastTriggeredExecutor.column}, Row ${lastTriggeredExecutor.row}`);
@@ -170,7 +171,7 @@ function handleScoliaMessage(message) {
       break;
 
     default:
-      logger.debug('Okänt meddelande:', message.type);
+      logger.info('Okänt meddelande:', message.type, JSON.stringify(message.payload || {}));
   }
 }
 
@@ -332,6 +333,7 @@ function handleThrowDetected(payload) {
   }
 
   // Trigga ljud (fire-and-forget, parallellt med ljus)
+  // Segment-specifika ljud har prioritet (t.ex. triple_20 → godlike)
   if (sound) {
     if (points === 0) {
       sound.playSound('miss');
@@ -340,9 +342,9 @@ function handleThrowDetected(payload) {
     } else if (points === 25 && segment === 25) {
       sound.playSound('bull25');
     } else if (multiplier === 3) {
-      sound.playSound('triple');
+      sound.playSoundWithFallback(`triple_${segment}`, 'triple');
     } else if (multiplier === 2) {
-      sound.playSound('double');
+      sound.playSoundWithFallback(`double_${segment}`, 'double');
     }
   }
 
