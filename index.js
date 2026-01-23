@@ -332,9 +332,13 @@ function handleThrowDetected(payload) {
     }
   }
 
+  // Kolla special events (180, finish, etc) — returnerar true om special-ljud spelades
+  const specialPlayed = checkSpecialEvents();
+
   // Trigga ljud (fire-and-forget, parallellt med ljus)
   // Segment-specifika ljud har prioritet (t.ex. triple_20 → godlike)
-  if (sound) {
+  // Skippa om special event redan spelade ljud (t.ex. monsterkill vid 180)
+  if (sound && !specialPlayed) {
     if (points === 0) {
       sound.playSound('miss');
     } else if (points === 50) {
@@ -348,9 +352,6 @@ function handleThrowDetected(payload) {
     }
   }
 
-  // Kolla special events (180, finish, etc)
-  checkSpecialEvents();
-
   console.log('');
 }
 
@@ -362,7 +363,7 @@ function triggerLightEffect(mapping) {
   }
 }
 
-// Kolla special events
+// Kolla special events - returnerar true om special-ljud spelades
 function checkSpecialEvents() {
   // Kolla för 180 (3 senaste kasten = 180p totalt)
   if (config.special_events['180'].enabled && throwHistory.length >= 3) {
@@ -388,8 +389,12 @@ function checkSpecialEvents() {
           }
         });
       }
+
+      return true;
     }
   }
+
+  return false;
 }
 
 // Skicka meddelande till Scolia

@@ -3,6 +3,7 @@
 const readline = require('readline');
 const fs = require('fs');
 const { LightSharkController } = require('./lib/lightshark');
+const { SoundController } = require('./lib/sound');
 const { DartEventMapper } = require('./lib/mapper');
 const { Logger } = require('./lib/logger');
 
@@ -12,6 +13,7 @@ const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 // Initiera komponenter
 const logger = new Logger({ enabled: false, consoleOutput: true });
 const lightshark = config.lightshark.enabled ? new LightSharkController(config.lightshark, logger) : null;
+const sound = config.sound?.enabled ? new SoundController(config.sound, logger) : null;
 const mapper = new DartEventMapper(config.mapping, config.special_events, logger);
 
 // Random executor helper
@@ -102,6 +104,21 @@ function simulateThrow(throwData) {
     console.log('⚠️  Ingen ljusmappning hittades för detta kast');
   }
 
+  // Trigga ljud
+  if (sound) {
+    if (points === 0) {
+      sound.playSound('miss');
+    } else if (points === 50) {
+      sound.playSound('bullseye');
+    } else if (points === 25 && segment === 25) {
+      sound.playSound('bull25');
+    } else if (multiplier === 3) {
+      sound.playSoundWithFallback(`triple_${segment}`, 'triple');
+    } else if (multiplier === 2) {
+      sound.playSoundWithFallback(`double_${segment}`, 'double');
+    }
+  }
+
   console.log('');
 }
 
@@ -118,11 +135,13 @@ function simulate180() {
         // Trigga special 180-effekt
         setTimeout(() => {
           console.log('🎆 SPECIAL EFFEKT: 180! 🎆\n');
+          if (sound) sound.playSound('180');
           if (lightshark && config.special_events['180'].enabled) {
-            const exec = config.special_events['180'].lightshark_executor;
-            if (exec) {
-              lightshark.triggerExecutor(exec.page, exec.column, exec.row);
-            }
+            const executors = config.special_events['180'].lightshark_executors ||
+                             [config.special_events['180'].lightshark_executor];
+            executors.forEach(exec => {
+              if (exec) lightshark.triggerExecutor(exec.page, exec.column, exec.row);
+            });
           }
         }, 500);
       }
