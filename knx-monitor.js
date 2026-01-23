@@ -1,6 +1,16 @@
 #!/usr/bin/env node
 
 const knx = require('knx');
+const fs = require('fs');
+
+const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
+const gateway = config.knx?.gateway;
+const port = config.knx?.port || 3671;
+
+if (!gateway) {
+  console.error('Ingen KNX-gateway konfigurerad i config.json');
+  process.exit(1);
+}
 
 console.log(`
 ╔═══════════════════════════════════════════════╗
@@ -10,11 +20,11 @@ console.log(`
 ╚═══════════════════════════════════════════════╝
 `);
 
-console.log('Ansluter till KNX gateway 192.168.6.169:3671...\n');
+console.log(`Ansluter till KNX gateway ${gateway}:${port}...\n`);
 
 const connection = new knx.Connection({
-  ipAddr: '192.168.6.169',
-  ipPort: 3671,
+  ipAddr: gateway,
+  ipPort: port,
   handlers: {
     connected: () => {
       console.log('✓ Ansluten till KNX! Tryck på lampknappar nu...\n');
