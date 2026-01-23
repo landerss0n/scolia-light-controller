@@ -17,7 +17,10 @@ Detta dokument innehåller all kontext som behövs för att göra ändringar i p
 
 ```
 Scolia Darttavla → Scolia Cloud (WebSocket) → index.js → LightShark (OSC)
+                                                       → KNX (KNXnet/IP)
                                                        → Ljud (play-sound / PowerShell)
+
+KNX IP-gateway ──extern länk──→ LightShark (KNX allOff/allOn påverkar LightShark)
 ```
 
 ## Viktiga filer
@@ -44,6 +47,13 @@ Scolia Darttavla → Scolia Cloud (WebSocket) → index.js → LightShark (OSC)
 - `playSoundWithFallback(specific, fallback)` - Försöker segment-specifikt ljud först (t.ex. `triple_20`), faller tillbaka till generellt (t.ex. `triple`)
 - Kräver WAV-filer i `sounds/`-mappen
 
+### lib/knx.js
+- KNX IP-gateway kommunikation via `knx` npm-paket
+- `connect()` - Anslut till KNX gateway
+- `write(groupAddress, value, dpt)` - Skriv till gruppadress
+- `triggerAction(actionName)` - Kör namngiven action från config (t.ex. 'allOff', 'allOn')
+- `disconnect()` - Koppla ner
+
 ### lib/mapper.js
 - Mappningslogik för dart → ljuseffekt (används som fallback)
 - Läser `mapping`-sektionen i config.json
@@ -55,13 +65,21 @@ Finns i `index.js` → `handleThrowDetected()`:
 
 ```javascript
 // Prioritetsordning:
-1. Miss (points === 0) → noScoreExecutor (LED Dim OFF)
+1. Miss (points === 0) → KNX allOff (om KNX aktivt), annars noScoreExecutor
 2. Bullseye 50p → bullseyeExecutor (Moln Ow Strobe)
 3. Bull 25p → greenExecutor (LED Green)
 4. Dubbel/Trippel på rött segment → redExecutor
 5. Dubbel/Trippel på grönt segment → greenExecutor
-6. Singel → Släck senaste färg (visa 3k 100% basbelysning)
+6. Singel → Släck senaste färg + KNX allOn om lampor var släckta
 ```
+
+### KNX-interaktion med LightShark
+KNX har en extern fysisk länk till LightShark. Detta innebär:
+- **KNX allOff** → Släcker ALL belysning (inkl. LightShark via extern länk)
+- **KNX allOn** → Återställer basbelysning (3k 100% på LightShark)
+- **Färg-kast efter miss** → Triggar LightShark-färg direkt UTAN KNX allOn (färg-executors funkar oberoende av 3k 100%)
+- **Singel efter miss** → KNX allOn (återställer 3k 100%)
+- **Timing viktigt:** KNX allOn skickas bara vid singlar/icke-färg-kast för att undvika att 3k 100% skriver över färgen
 
 ### Darttavlans färgschema
 - **Röda segment:** 20, 18, 13, 10, 2, 3, 7, 8, 14, 12
@@ -71,6 +89,7 @@ Finns i `index.js` → `handleThrowDetected()`:
 
 ### Viktiga variabler
 - `lastTriggeredExecutor` - Sparar senast triggade executor för att kunna släcka vid nästa kast/takeout
+- `knxLightsOff` - Boolean som spårar om KNX har släckt lamporna (true efter miss)
 - `throwHistory[]` - Sparar de senaste 100 kasten (för 180-detection)
 
 ## LightShark Executor Grid (Page 1)
@@ -176,9 +195,16 @@ Baserat på användarens setup:
       "triple_19": { "file": "dominating.wav" },
       "triple_18": { "file": "unstoppable.wav" },
       "triple_17": { "file": "rampage.wav" },
-      "180": { "file": "monsterkill.wav" },
-      "takeout": { "file": "prepare.wav" },
-      "winner": { "file": "winner.wav" }
+      "180": { "file": "monsterkill.wav" }
+    }
+  },
+  "knx": {
+    "enabled": true,
+    "gateway": "192.168.6.169",
+    "port": 3671,
+    "actions": {
+      "allOff": [{ "ga": "0/0/1", "value": 5 }],  // Släcker alla lampor
+      "allOn": [{ "ga": "0/0/1", "value": 0 }]    // Tänder alla lampor
     }
   },
   "mapping": { ... },           // Fallback om colorMode är av
@@ -227,8 +253,8 @@ Segment-specifika ljud har prioritet via `playSoundWithFallback()`:
 
 Special events:
 - 180 → monsterkill (triggas i `checkSpecialEvents()`)
-- Takeout → prepare (triggas i `TAKEOUT_FINISHED`)
-- Winner → winner (TODO: koppla till matchslut-event)
+
+**OBS:** Scolia Social API skickar inte matchstart/matchslut-events.
 
 ## Viktigt att veta
 
@@ -238,6 +264,8 @@ Special events:
 4. **3k 100% ska aldrig triggas manuellt** - Den är alltid på, andra executors skriver över
 5. **Executors är toggle-baserade** - Trigga samma executor två gånger = av. Kod förhindrar dubbel-toggle via `lastTriggeredExecutor`
 6. **Cross-platform ljud** - macOS: afplay, Linux: aplay/mpg123, Windows: PowerShell SoundPlayer
+7. **KNX extern länk till LightShark** - KNX allOff/allOn påverkar LightShark. Färg-executors triggas direkt utan KNX allOn för att undvika att 3k 100% skriver över färgen
+8. **KNX allOn bara vid singlar** - Vid färg-kast (dubbel/trippel) efter miss skickas INTE KNX allOn — färg-executors funkar oberoende
 
 ## Körning
 
