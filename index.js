@@ -3,6 +3,7 @@
 const WebSocket = require('ws');
 const fs = require('fs');
 const { LightSharkController } = require('./lib/lightshark');
+const { SoundController } = require('./lib/sound');
 const { DartEventMapper } = require('./lib/mapper');
 const { Logger } = require('./lib/logger');
 
@@ -12,6 +13,7 @@ const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 // Initiera komponenter
 const logger = new Logger(config.logging);
 const lightshark = config.lightshark.enabled ? new LightSharkController(config.lightshark, logger) : null;
+const sound = config.sound?.enabled ? new SoundController(config.sound, logger) : null;
 const mapper = new DartEventMapper(config.mapping, config.special_events, logger);
 
 let ws = null;
@@ -329,6 +331,21 @@ function handleThrowDetected(payload) {
     }
   }
 
+  // Trigga ljud (fire-and-forget, parallellt med ljus)
+  if (sound) {
+    if (points === 0) {
+      sound.playSound('miss');
+    } else if (points === 50) {
+      sound.playSound('bullseye');
+    } else if (points === 25 && segment === 25) {
+      sound.playSound('bull25');
+    } else if (multiplier === 3) {
+      sound.playSound('triple');
+    } else if (multiplier === 2) {
+      sound.playSound('double');
+    }
+  }
+
   // Kolla special events (180, finish, etc)
   checkSpecialEvents();
 
@@ -352,6 +369,10 @@ function checkSpecialEvents() {
 
     if (totalPoints === 180) {
       logger.success('🔥🔥🔥 180!!! 🔥🔥🔥');
+
+      if (sound) {
+        sound.playSound('180');
+      }
 
       // Stöd för flera executors
       const executors = config.special_events['180'].lightshark_executors ||

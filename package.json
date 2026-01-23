@@ -8,11 +8,17 @@
     "simulate": "node simulator.js",
     "test": "node test-connection.js"
   },
-  "keywords": ["scolia", "dart", "lightshark", "osc"],
+  "keywords": [
+    "scolia",
+    "dart",
+    "lightshark",
+    "osc"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "ws": "^8.16.0",
-    "node-osc": "^9.0.0"
+    "node-osc": "^9.0.0",
+    "play-sound": "^1.1.6",
+    "ws": "^8.16.0"
   }
 }

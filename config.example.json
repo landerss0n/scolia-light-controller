@@ -87,6 +87,24 @@
     }
   },
 
+  "sound": {
+    "enabled": true,
+    "_comment_enabled": "true = spela ljud vid events, false = inaktivera",
+
+    "soundsDir": "./sounds",
+    "_comment_soundsDir": "Mapp med ljudfiler (relativ till projektrot)",
+
+    "sounds": {
+      "bullseye": { "file": "bullseye.wav" },
+      "bull25": { "file": "bull25.wav" },
+      "180": { "file": "180.wav" },
+      "miss": { "file": "miss.wav" },
+      "double": { "file": "double.wav" },
+      "triple": { "file": "triple.wav" }
+    },
+    "_comment_sounds": "Ljudfiler per event - lägg WAV-filer i sounds/-mappen"
+  },
+
   "logging": {
     "enabled": true,
     "logFile": "dart-events.log",
