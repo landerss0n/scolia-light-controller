@@ -252,8 +252,8 @@ function handleThrowDetected(payload) {
     let execToTrigger = null;
     let effectName = '';
 
-    // Noscore (miss) - KNX hanterar släckning om aktivt, annars LightShark
-    if (points === 0 && !knxController) {
+    // Noscore (miss) - Släcker via LightShark noScoreExecutor
+    if (points === 0) {
       execToTrigger = effect.noScoreExecutor;
       effectName = '❌ NOSCORE! Släcker lampor';
     }
