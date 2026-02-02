@@ -23,6 +23,17 @@ Styr LightShark-belysning i realtid baserat på Scolia darttavla-events via OSC.
 - **Auto-reset** - Lampor återgår till 3k 100% när pilar tas ut
 - **Random Executor Mode** - Slumpmässig executor vid varje kast (för test)
 - **180 Detection** - Special-effekt vid 180 poäng
+- **Game Tracking** - Poängspårning med bust-detection:
+  - 1–4 spelare med konfigurerbart startpoäng (170, 301, 501 etc.)
+  - Single/Double out
+  - Automatisk bust-detection (under 0, exakt 1 vid double out, exakt 0 utan dubbel)
+  - Auto-advance efter 3 kast, manuell spelarväxling vid behov
+  - Ångra senaste kast
+- **Webapp** - Next.js-webapp för att styra spelet från valfri enhet på nätverket:
+  - Starta/konfigurera spel
+  - Live poängställning med 500ms polling
+  - Manuellt kast-pad för test utan tavla
+  - Dark mode, mobilanpassad
 
 ## Snabbstart
 
@@ -30,8 +41,11 @@ Styr LightShark-belysning i realtid baserat på Scolia darttavla-events via OSC.
 # Installera dependencies
 npm install
 
-# Starta live-läge (kräver Scolia access token)
+# Starta API (ljus + ljud + spelspårning)
 npm start
+
+# Starta webapp (i separat terminal)
+cd webapp && npm install && npm run dev
 
 # Testa utan darttavla
 npm run simulate
@@ -39,6 +53,8 @@ npm run simulate
 # Testa LightShark-anslutning
 npm test
 ```
+
+Webapp nås på `http://<din-ip>:3001` från valfri enhet på nätverket.
 
 ## Konfiguration
 
@@ -71,6 +87,14 @@ Redigera `config.json`:
 }
 ```
 
+### Game Tracking
+```json
+"game": {
+  "enabled": true,
+  "apiPort": 3000
+}
+```
+
 ### Ljudeffekter
 ```json
 "sound": {
@@ -81,7 +105,9 @@ Redigera `config.json`:
     "bullseye": { "file": "headshot.wav" },
     "triple_20": { "file": "godlike.wav" },
     "triple": { "file": "triplekill.wav" },
-    "180": { "file": "monsterkill.wav" }
+    "180": { "file": "monsterkill.wav" },
+    "bust": { "file": "tjockis.wav" },
+    "win": { "file": "monsterkill.wav" }
   }
 }
 ```
@@ -118,19 +144,37 @@ Executors adresseras med `page`, `column`, `row` som motsvarar LightShark-gridde
 
 ```
 Scolia API/
-├── index.js              # Huvudapp - WebSocket till Scolia, OSC till LightShark
+├── index.js              # Huvudapp - WebSocket, ljus, ljud, spelspårning, REST API
 ├── simulator.js          # Testa ljuseffekter utan darttavla
 ├── test-connection.js    # Testa LightShark-anslutning
 ├── knx-monitor.js        # Verktyg: lyssna på KNX-buss för att hitta gruppadresser
-├── config.json           # Konfiguration
+├── config.json           # Konfiguration (gitignored, se config.example.json)
 ├── lib/
 │   ├── lightshark.js     # OSC-kommunikation med LightShark
 │   ├── knx.js            # KNX IP-gateway kommunikation
 │   ├── sound.js          # Ljuduppspelning (cross-platform)
 │   └── logger.js         # Loggning
 ├── sounds/               # WAV-filer för ljudeffekter
+├── webapp/               # Next.js webapp (shadcn/ui, Tailwind, dark mode)
+│   ├── src/app/          # App Router sidor
+│   ├── src/components/   # UI-komponenter (game-view, setup-form, throw-pad)
+│   └── src/lib/api.ts    # API-klient mot Express REST API
 └── CLAUDE.md             # Projektkontext för AI-assistans
 ```
+
+## REST API
+
+API:t körs på port 3000 (konfigureras i `config.json`).
+
+| Metod | Endpoint | Beskrivning |
+|-------|----------|-------------|
+| GET | `/api/game` | Hämta aktuell spelstate |
+| POST | `/api/game/start` | Starta nytt spel `{ startScore, players[], doubleOut }` |
+| POST | `/api/game/reset` | Nollställ pågående spel |
+| POST | `/api/game/next-player` | Byt till nästa spelare |
+| POST | `/api/game/undo` | Ångra senaste kastet |
+| POST | `/api/game/throw` | Simulera kast `{ sector }` (t.ex. "t20", "d16", "25", "None") |
+| GET | `/api/game/history` | Senaste 100 kasten |
 
 ## Protokoll
 

@@ -19,6 +19,9 @@ Detta dokument innehåller all kontext som behövs för att göra ändringar i p
 Scolia Darttavla → Scolia Cloud (WebSocket) → index.js → LightShark (OSC)
                                                        → KNX (KNXnet/IP)
                                                        → Ljud (play-sound / PowerShell)
+                                                       → Express REST API (port 3000)
+                                                             ↕
+                                                       Webapp (Next.js, port 3001)
 
 KNX IP-gateway ──extern länk──→ LightShark (KNX allOff/allOn påverkar LightShark)
 ```
@@ -30,6 +33,18 @@ KNX IP-gateway ──extern länk──→ LightShark (KNX allOff/allOn påverka
 - Hanterar events: `THROW_DETECTED`, `TAKEOUT_FINISHED`, `TAKEOUT_STARTED`
 - Parsear sektor-strängar från Scolia (t.ex. "s14", "d20", "t19", "25", "50")
 - Triggar LightShark executors baserat på `config.json`
+- **Game tracking:** Intern poängspårning med bust-detection
+- **Express REST API:** Endpoints för att styra spelet från webapp
+- **Spellogik-funktioner:** `handleGameThrow()`, `advanceTurn()`, `revertTurn()`
+
+### webapp/ (Next.js)
+- Next.js App Router med TypeScript, Tailwind, shadcn/ui
+- Lyssnar på `0.0.0.0:3001` (nåbar på nätverket)
+- Pollar `GET /api/game` var 500ms för live-uppdatering
+- `src/components/setup-form.tsx` — Starta spel (poäng, spelare, double out)
+- `src/components/game-view.tsx` — Live poängställning, kast-historik, vinnare
+- `src/components/throw-pad.tsx` — Manuellt kast-pad (single/double/triple + segment)
+- `src/lib/api.ts` — API-klient (fetchGameState, startGame, resetGame, etc.)
 
 ### lib/lightshark.js
 - OSC-kommunikation med LightShark
@@ -87,6 +102,49 @@ KNX har en extern fysisk länk till LightShark. Detta innebär:
 - `lastTriggeredExecutor` - Sparar senast triggade executor för att kunna släcka vid nästa kast/takeout
 - `knxLightsOff` - Boolean som spårar om KNX har släckt lamporna (true efter miss)
 - `throwHistory[]` - Sparar de senaste 100 kasten (för 180-detection)
+- `gameState` - Spelstate-objekt (se nedan)
+
+## Game Tracking
+
+### gameState-objekt
+```javascript
+{
+  active: boolean,          // Om spel pågår
+  players: [{ name, score }],
+  currentPlayer: number,    // Index i players[]
+  throwsInTurn: number,     // 0-3, räknar kast i turen
+  turnStartScore: number,   // Poäng vid turens start (för revert vid bust)
+  turnThrows: [],           // Kast-data i nuvarande tur
+  turnAdvanced: boolean,    // true om turen redan bytts (förhindrar dubbel-advance)
+  startScore: number,       // Konfigurerat startpoäng
+  doubleOut: boolean,
+  winner: number | null     // Index för vinnaren, null om ingen vunnit
+}
+```
+
+### Bust-logik (`handleGameThrow()`)
+- **Under 0** → Bust, revert alla kast i turen
+- **Exakt 1 vid double out** → Bust (kan inte checka ut)
+- **Exakt 0 utan dubbel vid double out** → Bust (måste checka ut med dubbel)
+- **Exakt 0 med dubbel (eller utan double out)** → Vinst!
+
+### Turn-hantering
+- `handleGameThrow()` sätter `turnAdvanced = false` vid varje kast
+- Efter 3 kast → `advanceTurn()` körs automatiskt, sätter `turnAdvanced = true`
+- Vid bust → `revertTurn()` återställer poäng och kör `advanceTurn()`
+- Vid `TAKEOUT_FINISHED` → `advanceTurn()` körs **bara om `turnAdvanced === false`**
+- Detta förhindrar dubbel-advance (3 kast auto-advance + takeout)
+
+### REST API Endpoints
+| Metod | Endpoint | Beskrivning |
+|-------|----------|-------------|
+| GET | `/api/game` | Hämta spelstate |
+| POST | `/api/game/start` | `{ startScore, players[], doubleOut }` |
+| POST | `/api/game/reset` | Nollställ spel |
+| POST | `/api/game/next-player` | Byt spelare manuellt |
+| POST | `/api/game/undo` | Ångra senaste kastet |
+| POST | `/api/game/throw` | Simulera kast `{ sector }` |
+| GET | `/api/game/history` | Senaste 100 kasten |
 
 ## LightShark Executor Grid (Page 1)
 
@@ -248,6 +306,8 @@ Segment-specifika ljud har prioritet via `playSoundWithFallback()`:
 
 Special events:
 - 180 → monsterkill (triggas i `checkSpecialEvents()`)
+- Bust → tjockis.wav (triggas i `handleThrowDetected()` vid bust)
+- Win → monsterkill.wav (triggas vid checkout/vinst)
 
 **OBS:** Scolia Social API skickar inte matchstart/matchslut-events.
 
@@ -265,8 +325,11 @@ Special events:
 ## Körning
 
 ```bash
-# Produktion
+# API (ljus + ljud + spelspårning + REST)
 npm start
+
+# Webapp (separat terminal)
+cd webapp && npm run dev
 
 # Test/Simulator
 npm run simulate
@@ -275,6 +338,15 @@ npm run simulate
 # Kolla: ps aux | grep node
 # Döda: killall node
 ```
+
+## Viktigt om TAKEOUT_FINISHED och spelarväxling
+
+Scolia skickar `TAKEOUT_FINISHED` när pilarna tas ut från tavlan. Denna event används för att byta spelare, men med en viktig detalj:
+
+- Om spelaren kastat 3 pilar har `advanceTurn()` redan körts automatiskt (`turnAdvanced = true`)
+- Om spelaren kastat < 3 pilar (missade tavlan helt, eller valde att ta ut tidigt) har turen inte bytts ännu
+- Takeout kollar `turnAdvanced`-flaggan och byter bara spelare om den är `false`
+- Scolia kan INTE detektera kast som missar tavlan helt — därför kan `throwsInTurn` vara < 3 även om spelaren kastat alla pilar
 
 ## Filer som rensats bort
 
