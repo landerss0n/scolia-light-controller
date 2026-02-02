@@ -157,6 +157,10 @@ function handleScoliaMessage(message) {
 
     case 'TAKEOUT_FINISHED':
       logger.info('✓ Pilar uttagna, redo för nästa kast');
+      // Spela takeout-ljud
+      if (sound) {
+        sound.playSound('takeout');
+      }
       // Tänd KNX-lampor om de var släckta (miss)
       if (knxController && knxLightsOff) {
         knxController.triggerAction('allOn');
@@ -364,6 +368,8 @@ function handleThrowDetected(payload) {
       sound.playSoundWithFallback(`triple_${segment}`, 'triple');
     } else if (multiplier === 2) {
       sound.playSoundWithFallback(`double_${segment}`, 'double');
+    } else if (multiplier === 1 && points === 1) {
+      sound.playSound('single_1');
     }
   }
 
@@ -397,6 +403,18 @@ function checkSpecialEvents() {
         });
       }
 
+      return true;
+    }
+  }
+
+  // Kolla för 3 missar i rad
+  if (throwHistory.length >= 3) {
+    const lastThree = throwHistory.slice(-3);
+    if (lastThree.every(t => t.points === 0)) {
+      logger.warn('💀 Tre missar i rad!');
+      if (sound) {
+        sound.playSound('three_misses');
+      }
       return true;
     }
   }
