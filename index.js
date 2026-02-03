@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+const { execSync } = require('child_process');
 const WebSocket = require('ws');
 const fs = require('fs');
 const express = require('express');
@@ -8,6 +9,22 @@ const { LightSharkController } = require('./lib/lightshark');
 const { SoundController } = require('./lib/sound');
 const { KnxController } = require('./lib/knx');
 const { Logger } = require('./lib/logger');
+
+// Döda gamla instanser som lyssnar på samma port
+function killOldInstances(port) {
+  try {
+    const pids = execSync(`lsof -ti :${port} 2>/dev/null`, { encoding: 'utf8' }).trim();
+    if (pids) {
+      const pidList = pids.split('\n').filter(p => p && p !== String(process.pid));
+      if (pidList.length > 0) {
+        execSync(`kill ${pidList.join(' ')} 2>/dev/null`);
+        console.log(`Dödade gamla instanser på port ${port}: PID ${pidList.join(', ')}`);
+      }
+    }
+  } catch {
+    // Inga gamla instanser
+  }
+}
 
 // Ladda konfiguration
 const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
@@ -191,6 +208,7 @@ function startApiServer() {
   });
 
   const port = config.game.apiPort || 3000;
+  killOldInstances(port);
   app.listen(port, '0.0.0.0', () => {
     logger.success(`✓ REST API lyssnar på port ${port}`);
   });
