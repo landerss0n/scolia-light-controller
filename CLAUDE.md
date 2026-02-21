@@ -40,11 +40,11 @@ KNX IP-gateway ──extern länk──→ LightShark (KNX allOff/allOn påverka
 ### webapp/ (Next.js)
 - Next.js App Router med TypeScript, Tailwind, shadcn/ui
 - Lyssnar på `0.0.0.0:3001` (nåbar på nätverket)
-- Pollar `GET /api/game` var 500ms för live-uppdatering
+- Live-uppdatering via SSE (Server-Sent Events) från `/api/game/events`
 - `src/components/setup-form.tsx` — Starta spel (poäng, spelare, double out)
 - `src/components/game-view.tsx` — Live poängställning, kast-historik, vinnare
 - `src/components/throw-pad.tsx` — Manuellt kast-pad (single/double/triple + segment)
-- `src/lib/api.ts` — API-klient (fetchGameState, startGame, resetGame, etc.)
+- `src/lib/api.ts` — API-klient (fetchGameState, startGame, resetGame, createEventSource, etc.)
 
 ### lib/lightshark.js
 - OSC-kommunikation med LightShark
@@ -57,9 +57,10 @@ KNX IP-gateway ──extern länk──→ LightShark (KNX allOff/allOn påverka
 - Metoder: `info()`, `success()`, `warn()`, `error()`, `debug()`
 
 ### lib/sound.js
-- Ljuduppspelning via `play-sound` (macOS/Linux) och PowerShell (Windows)
+- Ljuduppspelning via `afplay` (macOS med volymstöd), `play-sound` (Linux) och PowerShell (Windows)
 - `playSound(eventName)` - Spelar ljud fire-and-forget
 - `playSoundWithFallback(specific, fallback)` - Försöker segment-specifikt ljud först (t.ex. `triple_20`), faller tillbaka till generellt (t.ex. `triple`)
+- Stöd per ljud: `volume` (0.0–2.0, default 1.0), `enabled` (true/false)
 - Kräver WAV-filer i `sounds/`-mappen
 
 ### lib/knx.js
@@ -76,7 +77,7 @@ Finns i `index.js` → `handleThrowDetected()`:
 
 ```javascript
 // Prioritetsordning:
-1. Miss (points === 0) → KNX allOff (om KNX aktivt), annars noScoreExecutor
+1. Miss (points === 0) → noScoreExecutor (LightShark) + KNX allOff (om KNX aktivt)
 2. Bullseye 50p → bullseyeExecutor (Moln Ow Strobe)
 3. Bull 25p → greenExecutor (LED Green)
 4. Dubbel/Trippel på rött segment → redExecutor
@@ -139,12 +140,13 @@ KNX har en extern fysisk länk till LightShark. Detta innebär:
 | Metod | Endpoint | Beskrivning |
 |-------|----------|-------------|
 | GET | `/api/game` | Hämta spelstate |
+| GET | `/api/game/events` | SSE-stream för live-uppdateringar |
 | POST | `/api/game/start` | `{ startScore, players[], doubleOut }` |
 | POST | `/api/game/reset` | Nollställ spel |
 | POST | `/api/game/next-player` | Byt spelare manuellt |
 | POST | `/api/game/undo` | Ångra senaste kastet |
 | POST | `/api/game/throw` | Simulera kast `{ sector }` |
-| GET | `/api/game/history` | Senaste 100 kasten |
+| GET | `/api/game/history` | Senaste 50 kasten |
 
 ## LightShark Executor Grid (Page 1)
 
@@ -236,11 +238,15 @@ Baserat på användarens setup:
       ]
     }
   },
+  "game": {
+    "enabled": true,
+    "apiPort": 3000
+  },
   "sound": {
     "enabled": true,
     "soundsDir": "./sounds",
     "sounds": {
-      "miss": { "file": "failed.wav" },
+      "miss": { "file": "BInjur2.wav" },
       "bullseye": { "file": "headshot.wav" },
       "bull25": { "file": "ultrakill.wav" },
       "double": { "file": "doublekill.wav" },
@@ -249,11 +255,16 @@ Baserat på användarens setup:
       "triple_19": { "file": "dominating.wav" },
       "triple_18": { "file": "unstoppable.wav" },
       "triple_17": { "file": "rampage.wav" },
-      "180": { "file": "monsterkill.wav" }
+      "single_1": { "file": "cd1.wav" },
+      "180": { "file": "monsterkill.wav" },
+      "three_misses": { "file": "lostmatch.wav" },
+      "takeout": { "file": "draw.wav", "volume": 0.25 },
+      "bust": { "file": "tjockis.wav", "volume": 2.0 },
+      "win": { "file": "monsterkill.wav" }
     }
   },
   "knx": {
-    "enabled": true,
+    "enabled": false,
     "gateway": "192.168.6.169",
     "port": 3671,
     "actions": {
@@ -292,22 +303,28 @@ Redigera `colorMode` i `config.json`:
 Triggas parallellt med ljuseffekter (fire-and-forget) i `handleThrowDetected()`:
 
 ```javascript
-// Prioritetsordning:
-1. Miss → 'miss' (failed.wav)
-2. Bullseye 50p → 'bullseye' (headshot.wav)
-3. Bull 25p → 'bull25' (ultrakill.wav)
-4. Trippel → 'triple_{segment}' med fallback till 'triple'
-5. Dubbel → 'double_{segment}' med fallback till 'double'
+// Prioritetsordning (bust/win har högst prio):
+1. Bust → 'bust' (tjockis.wav, volume 2.0)
+2. Win → 'win' (monsterkill.wav)
+// Om inget special event spelades:
+3. Miss → 'miss' (BInjur2.wav)
+4. Bullseye 50p → 'bullseye' (headshot.wav)
+5. Bull 25p → 'bull25' (ultrakill.wav)
+6. Trippel → 'triple_{segment}' med fallback till 'triple'
+7. Dubbel → 'double_{segment}' med fallback till 'double'
+8. Singel 1 → 'single_1' (cd1.wav)
 ```
 
 Segment-specifika ljud har prioritet via `playSoundWithFallback()`:
 - T20 → godlike, T19 → dominating, T18 → unstoppable, T17 → rampage
 - Övriga tripplar → triplekill (generellt)
 
-Special events:
-- 180 → monsterkill (triggas i `checkSpecialEvents()`)
-- Bust → tjockis.wav (triggas i `handleThrowDetected()` vid bust)
-- Win → monsterkill.wav (triggas vid checkout/vinst)
+Special events (triggas i `checkSpecialEvents()`, har prio över vanliga ljud):
+- 180 → monsterkill (3 senaste kast = 180p totalt)
+- Tre missar i rad → lostmatch
+
+Takeout-ljud:
+- TAKEOUT_FINISHED → 'takeout' (draw.wav, volume 0.25)
 
 **OBS:** Scolia Social API skickar inte matchstart/matchslut-events.
 
@@ -327,16 +344,13 @@ Special events:
 ```bash
 # API (ljus + ljud + spelspårning + REST)
 npm start
+# OBS: Dödar automatiskt gamla instanser på samma port vid start (killOldInstances)
 
 # Webapp (separat terminal)
 cd webapp && npm run dev
 
 # Test/Simulator
 npm run simulate
-
-# Bakgrundsprocess redan igång?
-# Kolla: ps aux | grep node
-# Döda: killall node
 ```
 
 ## Viktigt om TAKEOUT_FINISHED och spelarväxling

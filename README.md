@@ -10,7 +10,7 @@ Styr LightShark-belysning i realtid baserat på Scolia darttavla-events via OSC.
   - Bullseye (50p) → Moln Ow Strobe
   - Bull (25p) → LED Green
   - Singel → Neutral (3k 100%)
-  - Miss → Lampor släcks (via KNX eller LightShark)
+  - Miss → Lampor släcks (via KNX och/eller LightShark)
 - **KNX-integration** - Styr rumsbelysning via KNX IP-gateway:
   - Miss → Släcker all belysning (KNX + LightShark via extern länk)
   - Singel efter miss → Återställer belysning
@@ -18,11 +18,15 @@ Styr LightShark-belysning i realtid baserat på Scolia darttavla-events via OSC.
 - **Ljudeffekter (Unreal Tournament-tema)** - Spelar ljud vid kast:
   - Segment-specifika ljud för T20 (Godlike), T19 (Dominating), T18 (Unstoppable), T17 (Rampage)
   - Generella ljud för dubblar (Double Kill), tripplar (Triple Kill)
-  - Bullseye → Headshot, Bull 25 → Ultrakill, Miss → Failed
-  - 180 → Monster Kill
+  - Bullseye → Headshot, Bull 25 → Ultrakill, Miss → BInjur2
+  - 180 → Monster Kill, Tre missar i rad → Lost Match
+  - Bust → Tjockis, Win → Monster Kill
+  - Takeout (pilar tas ut) → Draw
+  - Volymstöd per ljud (macOS)
 - **Auto-reset** - Lampor återgår till 3k 100% när pilar tas ut
 - **Random Executor Mode** - Slumpmässig executor vid varje kast (för test)
 - **180 Detection** - Special-effekt vid 180 poäng
+- **Tre missar-detection** - Special-ljud vid 3 missar i rad
 - **Game Tracking** - Poängspårning med bust-detection:
   - 1–4 spelare med konfigurerbart startpoäng (170, 301, 501 etc.)
   - Single/Double out
@@ -31,21 +35,86 @@ Styr LightShark-belysning i realtid baserat på Scolia darttavla-events via OSC.
   - Ångra senaste kast
 - **Webapp** - Next.js-webapp för att styra spelet från valfri enhet på nätverket:
   - Starta/konfigurera spel
-  - Live poängställning med 500ms polling
+  - Live poängställning via SSE (Server-Sent Events)
   - Manuellt kast-pad för test utan tavla
   - Dark mode, mobilanpassad
+
+## Systemkrav
+
+- Node.js v18+
+- LightShark med OSC aktiverat
+- Scolia darttavla med API-access
+- Ljud: macOS (afplay, inbyggt), Linux (aplay/mpg123), Windows (PowerShell, inbyggt)
+- KNX (valfritt): KNX IP-gateway på nätverket
+
+## Installation
+
+### 1. Klona repot
+
+```bash
+git clone <repo-url>
+cd "Scolia API"
+```
+
+### 2. Installera API-dependencies
+
+```bash
+npm install
+```
+
+Detta installerar:
+- `ws` — WebSocket-klient för Scolia
+- `node-osc` — OSC/UDP för LightShark
+- `express` + `cors` — REST API + SSE
+- `play-sound` — Ljuduppspelning (macOS/Linux)
+- `knx` — KNX IP-gateway kommunikation
+
+### 3. Installera webapp-dependencies
+
+```bash
+cd webapp
+npm install
+cd ..
+```
+
+Webapp använder Next.js 16, React 19, Tailwind v4, shadcn/ui och Radix UI.
+
+### 4. Konfigurera
+
+Kopiera `config.example.json` till `config.json` och fyll i:
+
+```bash
+cp config.example.json config.json
+```
+
+Fyll i ditt Scolia-serienummer och access token (se [Konfiguration](#konfiguration) nedan).
+
+### 5. Starta
+
+```bash
+# Terminal 1 — API (ljus + ljud + spelspårning + REST)
+npm start
+
+# Terminal 2 — Webapp
+cd webapp && npm run dev
+```
+
+API:t startar på port 3000, webapp på port 3001.
+Webapp nås på `http://<din-ip>:3001` från valfri enhet på nätverket.
+
+**OBS:** API:t dödar automatiskt gamla instanser på samma port vid start.
 
 ## Snabbstart
 
 ```bash
-# Installera dependencies
-npm install
+# Installera allt
+npm install && cd webapp && npm install && cd ..
 
-# Starta API (ljus + ljud + spelspårning)
+# Starta API
 npm start
 
-# Starta webapp (i separat terminal)
-cd webapp && npm install && npm run dev
+# Starta webapp (separat terminal)
+cd webapp && npm run dev
 
 # Testa utan darttavla
 npm run simulate
@@ -53,8 +122,6 @@ npm run simulate
 # Testa LightShark-anslutning
 npm test
 ```
-
-Webapp nås på `http://<din-ip>:3001` från valfri enhet på nätverket.
 
 ## Konfiguration
 
@@ -65,9 +132,12 @@ Redigera `config.json`:
 "scolia": {
   "serialNumber": "DITT-SERIENUMMER",
   "accessToken": "DIN-ACCESS-TOKEN",
-  "simulationMode": false
+  "simulationMode": false,
+  "reconnectDelay": 5000
 }
 ```
+
+Sätt `simulationMode: true` för att köra utan Scolia-anslutning.
 
 ### LightShark-inställningar
 ```json
@@ -80,7 +150,8 @@ Redigera `config.json`:
     "colorMode": {
       "enabled": true,
       "redExecutor": { "page": 1, "column": 2, "row": 1 },
-      "greenExecutor": { "page": 1, "column": 2, "row": 2 }
+      "greenExecutor": { "page": 1, "column": 2, "row": 2 },
+      "bullseyeExecutor": { "page": 1, "column": 6, "row": 6 }
     },
     "noScoreExecutor": { "page": 1, "column": 8, "row": 4 }
   }
@@ -101,24 +172,29 @@ Redigera `config.json`:
   "enabled": true,
   "soundsDir": "./sounds",
   "sounds": {
-    "miss": { "file": "failed.wav" },
+    "miss": { "file": "BInjur2.wav" },
     "bullseye": { "file": "headshot.wav" },
-    "triple_20": { "file": "godlike.wav" },
+    "bull25": { "file": "ultrakill.wav" },
+    "double": { "file": "doublekill.wav" },
     "triple": { "file": "triplekill.wav" },
+    "triple_20": { "file": "godlike.wav" },
+    "single_1": { "file": "cd1.wav" },
     "180": { "file": "monsterkill.wav" },
-    "bust": { "file": "tjockis.wav" },
+    "three_misses": { "file": "lostmatch.wav" },
+    "takeout": { "file": "draw.wav", "volume": 0.25 },
+    "bust": { "file": "tjockis.wav", "volume": 2.0 },
     "win": { "file": "monsterkill.wav" }
   }
 }
 ```
 
-Segment-specifika ljud (t.ex. `triple_20`) har prioritet. Om inget segment-specifikt ljud finns faller det tillbaka till det generella (`triple`). Lägg egna WAV-filer i `sounds/`-mappen.
+Segment-specifika ljud (t.ex. `triple_20`) har prioritet. Om inget segment-specifikt ljud finns faller det tillbaka till det generella (`triple`). Varje ljud stödjer `volume` (0.0–2.0, default 1.0) och `enabled` (true/false). Lägg egna WAV-filer i `sounds/`-mappen.
 
 ### KNX-inställningar
 ```json
 "knx": {
-  "enabled": true,
-  "gateway": "192.168.1.50",
+  "enabled": false,
+  "gateway": "192.168.6.169",
   "port": 3671,
   "actions": {
     "allOff": [{ "ga": "0/0/1", "value": 5 }],
@@ -137,6 +213,7 @@ Executors adresseras med `page`, `column`, `row` som motsvarar LightShark-gridde
 | 3k 100% | 1 | 1 | 1 | Bas-belysning (alltid på) |
 | LED Red | 1 | 2 | 1 | Röd färg |
 | LED Green | 1 | 2 | 2 | Grön färg |
+| Moln Ow Strobe | 1 | 6 | 6 | Bullseye-effekt |
 | Disco | 1 | 1 | 5 | Disco-effekt |
 | LED Dim OFF | 1 | 8 | 4 | Släcker lampor |
 
@@ -144,7 +221,7 @@ Executors adresseras med `page`, `column`, `row` som motsvarar LightShark-gridde
 
 ```
 Scolia API/
-├── index.js              # Huvudapp - WebSocket, ljus, ljud, spelspårning, REST API
+├── index.js              # Huvudapp - WebSocket, ljus, ljud, spelspårning, REST API + SSE
 ├── simulator.js          # Testa ljuseffekter utan darttavla
 ├── test-connection.js    # Testa LightShark-anslutning
 ├── knx-monitor.js        # Verktyg: lyssna på KNX-buss för att hitta gruppadresser
@@ -152,29 +229,30 @@ Scolia API/
 ├── lib/
 │   ├── lightshark.js     # OSC-kommunikation med LightShark
 │   ├── knx.js            # KNX IP-gateway kommunikation
-│   ├── sound.js          # Ljuduppspelning (cross-platform)
+│   ├── sound.js          # Ljuduppspelning (cross-platform, volymstöd)
 │   └── logger.js         # Loggning
 ├── sounds/               # WAV-filer för ljudeffekter
-├── webapp/               # Next.js webapp (shadcn/ui, Tailwind, dark mode)
+├── webapp/               # Next.js webapp (shadcn/ui, Tailwind v4, dark mode)
 │   ├── src/app/          # App Router sidor
 │   ├── src/components/   # UI-komponenter (game-view, setup-form, throw-pad)
-│   └── src/lib/api.ts    # API-klient mot Express REST API
+│   └── src/lib/api.ts    # API-klient mot Express REST API (SSE)
 └── CLAUDE.md             # Projektkontext för AI-assistans
 ```
 
 ## REST API
 
-API:t körs på port 3000 (konfigureras i `config.json`).
+API:t körs på port 3000 (konfigureras i `config.json` → `game.apiPort`).
 
 | Metod | Endpoint | Beskrivning |
 |-------|----------|-------------|
 | GET | `/api/game` | Hämta aktuell spelstate |
+| GET | `/api/game/events` | SSE-stream för live-uppdateringar |
 | POST | `/api/game/start` | Starta nytt spel `{ startScore, players[], doubleOut }` |
 | POST | `/api/game/reset` | Nollställ pågående spel |
 | POST | `/api/game/next-player` | Byt till nästa spelare |
 | POST | `/api/game/undo` | Ångra senaste kastet |
 | POST | `/api/game/throw` | Simulera kast `{ sector }` (t.ex. "t20", "d16", "25", "None") |
-| GET | `/api/game/history` | Senaste 100 kasten |
+| GET | `/api/game/history` | Senaste 50 kasten |
 
 ## Protokoll
 
@@ -219,10 +297,8 @@ Testar att LightShark är nåbar via OSC.
 2. Kontrollera att executorn finns och är aktiv i LightShark
 3. Testa med simulatorn först
 
-## Systemkrav
-
-- Node.js v18+
-- LightShark med OSC aktiverat
-- Scolia darttavla med API-access
-- Ljud: macOS (afplay, inbyggt), Linux (aplay/mpg123), Windows (PowerShell, inbyggt)
-- KNX (valfritt): KNX IP-gateway på nätverket
+### Port redan upptagen
+API:t dödar automatiskt gamla instanser på samma port vid start. Om det inte fungerar:
+```bash
+lsof -ti :3000 | xargs kill
+```
