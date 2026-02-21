@@ -104,7 +104,9 @@
       "triple_19": { "file": "dominating.wav" },
       "triple_18": { "file": "unstoppable.wav" },
       "triple_17": { "file": "rampage.wav" },
-      "180": { "file": "monsterkill.wav" }
+      "180": { "file": "monsterkill.wav" },
+      "leg_won": { "file": "monsterkill.wav" },
+      "set_won": { "file": "monsterkill.wav", "volume": 2.0 }
     },
     "_comment_sounds": "Ljudfiler per event - lägg WAV i sounds/. Segment-specifika (t.ex. triple_20) har prioritet över generella (triple)"
   },
@@ -124,6 +126,26 @@
       "allOn": [{ "ga": "0/0/1", "value": 0 }]
     },
     "_comment_actions": "Gruppaddresser och värden att skicka vid events. Miss → allOff, nästa poäng → allOn"
+  },
+
+  "playwright": {
+    "enabled": false,
+    "_comment_enabled": "true = övervaka Scolias webbapp för bust/leg-won/set-won events",
+
+    "url": "https://game.scoliadarts.com",
+    "_comment_url": "Scolia game URL",
+
+    "credentials": { "email": "", "password": "" },
+    "_comment_credentials": "Inloggningsuppgifter (logga in manuellt första gången, cookies sparas)",
+
+    "cookieFile": "./scolia-cookies.json",
+    "_comment_cookieFile": "Fil för att spara inloggningscookies",
+
+    "pollIntervalMs": 200,
+    "_comment_pollIntervalMs": "Hur ofta DOM:en pollas (ms)",
+
+    "fullscreen": true,
+    "_comment_fullscreen": "true = starta browser i fullscreen/kiosk-läge"
   },
 
   "logging": {

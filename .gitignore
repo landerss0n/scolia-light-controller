@@ -4,5 +4,7 @@ dart-events.log
 .env
 .DS_Store
 config.json
+scolia-cookies.json
+scolia-dom*.html
 .claude/
 *.pdf

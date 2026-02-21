@@ -8,6 +8,7 @@ const cors = require('cors');
 const { LightSharkController } = require('./lib/lightshark');
 const { SoundController } = require('./lib/sound');
 const { KnxController } = require('./lib/knx');
+const { PlaywrightController } = require('./lib/playwright');
 const { Logger } = require('./lib/logger');
 
 // Döda gamla instanser som lyssnar på samma port
@@ -34,6 +35,7 @@ const logger = new Logger(config.logging);
 const lightshark = config.lightshark.enabled ? new LightSharkController(config.lightshark, logger) : null;
 const sound = config.sound?.enabled ? new SoundController(config.sound, logger) : null;
 const knxController = config.knx?.enabled ? new KnxController(config.knx, logger) : null;
+const playwrightController = config.playwright?.enabled ? new PlaywrightController(config.playwright, logger) : null;
 let knxLightsOff = false; // Spårar om KNX-lampor är släckta (från miss)
 
 let ws = null;
@@ -643,10 +645,11 @@ function handleThrowDetected(payload) {
   const specialPlayed = checkSpecialEvents();
 
   // Trigga ljud (fire-and-forget, parallellt med ljus)
+  // Om Playwright är aktivt hanterar den bust/win-ljud via DOM-övervakning
   if (sound) {
-    if (bustOccurred) {
+    if (bustOccurred && !playwrightController) {
       sound.playSound('bust');
-    } else if (winOccurred) {
+    } else if (winOccurred && !playwrightController) {
       sound.playSound('win');
     } else if (!specialPlayed) {
       if (points === 0) {
@@ -741,12 +744,13 @@ function generateUUID() {
 }
 
 // Graceful shutdown
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
   logger.info('');
   logger.info('Stänger av...');
 
   if (ws) ws.close();
   if (knxController) knxController.disconnect();
+  if (playwrightController) await playwrightController.close();
   if (reconnectTimeout) clearTimeout(reconnectTimeout);
 
   process.exit(0);
@@ -758,6 +762,33 @@ process.on('SIGINT', () => {
 
   // Starta REST API
   startApiServer();
+
+  // Starta Playwright DOM-övervakning
+  if (playwrightController) {
+    const ok = await playwrightController.launch();
+    if (ok) {
+      playwrightController.startMonitoring();
+
+      playwrightController.on('bust', () => {
+        logger.info('Playwright → BUST');
+        if (sound) sound.playSound('bust');
+      });
+
+      playwrightController.on('leg-won', () => {
+        logger.info('Playwright → LEG WON');
+        if (sound) sound.playSound('leg_won');
+      });
+
+      playwrightController.on('set-won', () => {
+        logger.info('Playwright → SET WON');
+        if (sound) sound.playSound('set_won');
+      });
+
+      logger.success('✓ Playwright DOM-övervakning aktiv');
+    } else {
+      logger.error('✗ Playwright kunde inte startas');
+    }
+  }
 
   if (!config.scolia.simulationMode) {
     connectToScolia();
