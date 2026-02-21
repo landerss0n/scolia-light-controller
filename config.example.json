@@ -105,8 +105,8 @@
       "triple_18": { "file": "unstoppable.wav" },
       "triple_17": { "file": "rampage.wav" },
       "180": { "file": "monsterkill.wav" },
-      "leg_won": { "file": "monsterkill.wav" },
-      "set_won": { "file": "monsterkill.wav", "volume": 2.0 }
+      "leg_won": { "file": "holy-shit.mp3" },
+      "set_won": { "file": "set_won.wav" }
     },
     "_comment_sounds": "Ljudfiler per event - lägg WAV i sounds/. Segment-specifika (t.ex. triple_20) har prioritet över generella (triple)"
   },
