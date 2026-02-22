@@ -2,8 +2,9 @@
 
 const knx = require('knx');
 const fs = require('fs');
+const path = require('path');
 
-const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
+const config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
 const gateway = config.knx?.gateway;
 const port = config.knx?.port || 3671;
 

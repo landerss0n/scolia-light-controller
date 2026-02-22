@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 const WebSocket = require('ws');
 const fs = require('fs');
+const path = require('path');
 const { LightSharkController } = require('./lib/lightshark');
 const { SoundController } = require('./lib/sound');
 const { KnxController } = require('./lib/knx');
@@ -12,7 +13,7 @@ const { parseSector } = require('./lib/sector');
 const { resolveThrowEffect, applyExecutor } = require('./lib/effects');
 
 // Ladda konfiguration
-const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
+const config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
 
 // Initiera komponenter
 const logger = new Logger(config.logging);
@@ -26,6 +27,7 @@ let ws = null;
 let reconnectTimeout = null;
 let throwHistory = [];
 let lastTriggeredExecutor = null; // Spara senaste executor för att kunna släcka vid takeout
+let lastSpecialExecutors = []; // Spårar 180-executors för att kunna toggla av vid takeout
 
 // Random executor helper
 function getRandomExecutor() {
@@ -125,6 +127,12 @@ function connectToScolia() {
   ws.on('close', () => {
     logger.warn('Anslutning till Scolia stängd');
 
+    // Nollställ state så gammal data inte påverkar nästa session
+    throwHistory = [];
+    lastTriggeredExecutor = null;
+    lastSpecialExecutors = [];
+    knxLightsOff = false;
+
     // Återanslut efter delay
     if (!reconnectTimeout) {
       reconnectTimeout = setTimeout(() => {
@@ -170,6 +178,14 @@ function handleScoliaMessage(message) {
       if (knxController && knxLightsOff) {
         knxController.triggerAction('allOn');
         knxLightsOff = false;
+      }
+      // Släck special-executors (180-effekt etc.)
+      if (lightshark && lastSpecialExecutors.length > 0) {
+        lastSpecialExecutors.forEach(exec => {
+          logger.info(`↩️  Släcker special-executor: Page ${exec.page}, Col ${exec.column}, Row ${exec.row}`);
+          lightshark.triggerExecutor(exec.page, exec.column, exec.row);
+        });
+        lastSpecialExecutors = [];
       }
       // Släck senaste executor (färg eller off) så 3k 100% syns igen
       if (lightshark && lastTriggeredExecutor) {
@@ -302,11 +318,12 @@ function handleThrowDetected(payload) {
 // Kolla special events - returnerar true om special-ljud spelades
 function checkSpecialEvents() {
   // Kolla för 180 (3 senaste kasten = 180p totalt)
-  if (config.special_events['180'].enabled && throwHistory.length >= 3) {
+  if (config.special_events?.['180']?.enabled && throwHistory.length >= 3) {
     const lastThree = throwHistory.slice(-3);
     const totalPoints = lastThree.reduce((sum, t) => sum + t.points, 0);
 
-    if (totalPoints === 180) {
+    if (totalPoints === 180 && !lastThree.some(t => t._180played)) {
+      lastThree.forEach(t => { t._180played = true; });
       logger.success('🔥🔥🔥 180!!! 🔥🔥🔥');
 
       if (sound) {
@@ -318,14 +335,34 @@ function checkSpecialEvents() {
                        [config.special_events['180'].lightshark_executor];
 
       if (lightshark && executors) {
+        lastSpecialExecutors = [];
         executors.forEach(exec => {
           if (exec) {
             logger.info(`🎆 180 effekt: Page ${exec.page}, Col ${exec.column}, Row ${exec.row}`);
             lightshark.triggerExecutor(exec.page, exec.column, exec.row);
+            lastSpecialExecutors.push(exec);
           }
         });
       }
 
+      return true;
+    }
+  }
+
+  // Kolla för singel 1 → 2 → 3 i följd
+  if (config.special_events?.one_two_three?.enabled && throwHistory.length >= 3) {
+    const lastThree = throwHistory.slice(-3);
+    if (
+      lastThree[0].segment === 1 && lastThree[0].multiplier === 1 &&
+      lastThree[1].segment === 2 && lastThree[1].multiplier === 1 &&
+      lastThree[2].segment === 3 && lastThree[2].multiplier === 1 &&
+      !lastThree.some(t => t._123played)
+    ) {
+      lastThree.forEach(t => { t._123played = true; });
+      logger.success('🍹 1-2-3! Fanta & Rosé! 🍹');
+      if (sound) {
+        sound.playSound('one_two_three');
+      }
       return true;
     }
   }

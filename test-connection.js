@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
 const fs = require('fs');
+const path = require('path');
 const { LightSharkController } = require('./lib/lightshark');
 const { Logger } = require('./lib/logger');
 
 // Ladda konfiguration
-const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
+const config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
 const logger = new Logger({ enabled: false, consoleOutput: true });
 
 console.log(`

@@ -2,13 +2,14 @@
 
 const readline = require('readline');
 const fs = require('fs');
+const path = require('path');
 const { LightSharkController } = require('./lib/lightshark');
 const { SoundController } = require('./lib/sound');
 const { Logger } = require('./lib/logger');
 const { resolveThrowEffect, applyExecutor } = require('./lib/effects');
 
 // Ladda konfiguration
-const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
+const config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
 
 // Initiera komponenter
 const logger = new Logger({ enabled: false, consoleOutput: true });
@@ -147,7 +148,7 @@ function simulate180() {
         setTimeout(() => {
           console.log('🎆 SPECIAL EFFEKT: 180! 🎆\n');
           if (sound) sound.playSound('180');
-          if (lightshark && config.special_events['180'].enabled) {
+          if (lightshark && config.special_events?.['180']?.enabled) {
             const executors = config.special_events['180'].lightshark_executors ||
                              [config.special_events['180'].lightshark_executor];
             executors.forEach(exec => {
