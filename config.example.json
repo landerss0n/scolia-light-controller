@@ -83,6 +83,10 @@
     "one_two_three": {
       "description": "Singel 1 → Singel 2 → Singel 3 i följd",
       "enabled": true
+    },
+    "three_ones": {
+      "description": "3x singel 1 i rad",
+      "enabled": true
     }
   },
 
@@ -106,6 +110,7 @@
       "single_1": { "file": "cd1.wav" },
       "180": { "file": "monsterkill.wav" },
       "one_two_three": { "file": "one_two_three.wav" },
+      "three_ones": { "file": "three_ones.wav" },
       "three_misses": { "file": "lostmatch.wav" },
       "takeout": { "file": "draw.wav", "volume": 0.25 },
       "bust": { "file": "tjockis.wav", "volume": 2.0 },

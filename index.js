@@ -367,6 +367,22 @@ function checkSpecialEvents() {
     }
   }
 
+  // Kolla för 3x singel 1 i rad
+  if (config.special_events?.three_ones?.enabled && throwHistory.length >= 3) {
+    const lastThree = throwHistory.slice(-3);
+    if (
+      lastThree.every(t => t.segment === 1 && t.multiplier === 1) &&
+      !lastThree.some(t => t._threeOnesPlayed)
+    ) {
+      lastThree.forEach(t => { t._threeOnesPlayed = true; });
+      logger.success('🎺 Tre ettor i rad! Wah wah waaaah 🎺');
+      if (sound) {
+        sound.playSound('three_ones');
+      }
+      return true;
+    }
+  }
+
   // Kolla för 3 missar i rad (sätt sentinel så det inte triggas igen på miss #4, #5 etc.)
   if (throwHistory.length >= 3) {
     const lastThree = throwHistory.slice(-3);
