@@ -103,8 +103,10 @@ KNX har en extern fysisk länk till LightShark. Detta innebär:
 
 ### Viktiga variabler
 - `lastTriggeredExecutor` - Sparar senast triggade executor för att kunna släcka vid nästa kast/takeout
+- `lastSpecialExecutors[]` - Sparar 180-executors för att kunna toggla av vid takeout
 - `knxLightsOff` - Boolean som spårar om KNX har släckt lamporna (true efter miss)
-- `throwHistory[]` - Sparar de senaste 100 kasten (för 180-detection och three_misses)
+- `throwHistory[]` - Sparar de senaste 100 kasten (för special events). Sentinels på kastobjekt förhindrar dubbletter: `_180played`, `_120played`, `_123played`, `_threeOnesPlayed`, `threeMissPlayed`
+- Alla state-variabler nollställs vid WebSocket-reconnect (`ws.on('close')`)
 
 ## LightShark Executor Grid (Page 1)
 
@@ -194,7 +196,10 @@ Baserat på användarens setup:
         { "page": 1, "column": 6, "row": 2 },
         { "page": 1, "column": 7, "row": 2 }
       ]
-    }
+    },
+    "120": { "enabled": true },
+    "one_two_three": { "enabled": true },
+    "three_ones": { "enabled": true }
   },
   "playwright": {
     "enabled": true,
@@ -222,11 +227,14 @@ Baserat på användarens setup:
       "triple_17": { "file": "rampage.wav" },
       "single_1": { "file": "cd1.wav" },
       "180": { "file": "monsterkill.wav" },
+      "120": { "file": "120.wav" },
+      "one_two_three": { "file": "one_two_three.wav" },
+      "three_ones": { "file": "three_ones.wav" },
       "three_misses": { "file": "lostmatch.wav" },
       "takeout": { "file": "draw.wav", "volume": 0.25 },
       "bust": { "file": "tjockis.wav", "volume": 2.0 },
-      "leg_won": { "file": "set_won.wav" },
-      "set_won": { "file": "monsterkill.wav" }
+      "leg_won": { "file": "holy-shit.wav" },
+      "set_won": { "file": "set_won.wav" }
     }
   },
   "knx": {
@@ -272,7 +280,10 @@ Triggas parallellt med ljuseffekter (fire-and-forget) i `handleThrowDetected()`:
 ```javascript
 // Special events har högst prio (checkSpecialEvents()):
 1. 180 → 'monsterkill' (3 senaste kast = 180p totalt)
-2. Tre missar i rad → 'lostmatch'
+2. 120 → '120' (2x triple 20 i rad)
+3. 1-2-3 → 'one_two_three' (singel 1 → 2 → 3 i följd)
+4. 3x singel 1 → 'three_ones' (sad trombone)
+5. Tre missar i rad → 'lostmatch'
 // Om inget special event spelades:
 3. Miss → 'miss' (BInjur2.wav)
 4. Bullseye 50p → 'bullseye' (headshot.wav)
