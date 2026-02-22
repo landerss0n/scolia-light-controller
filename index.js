@@ -28,6 +28,7 @@ let reconnectTimeout = null;
 let throwHistory = [];
 let lastTriggeredExecutor = null; // Spara senaste executor för att kunna släcka vid takeout
 let lastSpecialExecutors = []; // Spårar 180-executors för att kunna toggla av vid takeout
+let strobeTimer = null; // Timer för T20-strobe auto-off
 
 // Random executor helper
 function getRandomExecutor() {
@@ -132,6 +133,7 @@ function connectToScolia() {
     lastTriggeredExecutor = null;
     lastSpecialExecutors = [];
     knxLightsOff = false;
+    if (strobeTimer) { clearTimeout(strobeTimer); strobeTimer = null; }
 
     // Återanslut efter delay
     if (!reconnectTimeout) {
@@ -179,6 +181,16 @@ function handleScoliaMessage(message) {
       if (knxController && knxLightsOff) {
         knxController.triggerAction('allOn');
         knxLightsOff = false;
+      }
+      // Stäng av ev. pågående strobe
+      if (strobeTimer && lightshark) {
+        clearTimeout(strobeTimer);
+        strobeTimer = null;
+        const strobe = config.lightshark.throwEffect?.colorMode?.triple20Strobe;
+        if (strobe) {
+          lightshark.triggerExecutor(strobe.executor.page, strobe.executor.column, strobe.executor.row);
+          logger.info('⚡ T20 Strobe Fast: OFF (takeout)');
+        }
       }
       // Släck special-executors (180-effekt etc.)
       if (lightshark && lastSpecialExecutors.length > 0) {
@@ -269,6 +281,26 @@ function handleThrowDetected(payload) {
       } else {
         logger.info(result.effectName);
       }
+    }
+
+    // Strobe overlay: T20 och Bullseye 50p — strobe i 3s ovanpå färg
+    const isT20 = multiplier === 3 && segment === 20;
+    const isBullseye = points === 50;
+    if (lightshark && (isT20 || isBullseye) && effect.colorMode?.triple20Strobe) {
+      const strobe = effect.colorMode.triple20Strobe;
+      const label = isBullseye ? 'Bullseye' : 'T20';
+      // Rensa ev. pågående strobe-timer
+      if (strobeTimer) {
+        clearTimeout(strobeTimer);
+        lightshark.triggerExecutor(strobe.executor.page, strobe.executor.column, strobe.executor.row);
+      }
+      logger.info(`⚡ ${label} Strobe Fast: ON (${strobe.durationMs / 1000}s)`);
+      lightshark.triggerExecutor(strobe.executor.page, strobe.executor.column, strobe.executor.row);
+      strobeTimer = setTimeout(() => {
+        logger.info(`⚡ ${label} Strobe Fast: OFF`);
+        lightshark.triggerExecutor(strobe.executor.page, strobe.executor.column, strobe.executor.row);
+        strobeTimer = null;
+      }, strobe.durationMs);
     }
 
     // KNX: återställ lampor vid singel/icke-färg-kast efter miss (färger funkar utan allOn)
@@ -453,6 +485,7 @@ process.on('SIGINT', async () => {
   if (knxController) knxController.disconnect();
   if (playwrightController) await playwrightController.close();
   if (reconnectTimeout) clearTimeout(reconnectTimeout);
+  if (strobeTimer) clearTimeout(strobeTimer);
   logger.close();
 
   process.exit(0);
