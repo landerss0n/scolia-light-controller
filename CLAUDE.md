@@ -80,12 +80,20 @@ Finns i `index.js` → `handleThrowDetected()`:
 ```javascript
 // Prioritetsordning:
 1. Miss (points === 0) → noScoreExecutor (LightShark) + KNX allOff (om KNX aktivt)
-2. Bullseye 50p → bullseyeExecutor (Moln Ow Strobe)
+2. Bullseye 50p → bullseyeExecutor (Moln Ow Strobe) + Strobe overlay 3s
 3. Bull 25p → greenExecutor (LED Green)
-4. Dubbel/Trippel på rött segment → redExecutor
-5. Dubbel/Trippel på grönt segment → greenExecutor
-6. Singel → Släck senaste färg + KNX allOn om lampor var släckta
+4. Trippel 20 → redExecutor + Strobe overlay 3s
+5. Dubbel/Trippel på rött segment → redExecutor
+6. Dubbel/Trippel på grönt segment → greenExecutor
+7. Singel → Släck senaste färg + KNX allOn om lampor var släckta
 ```
+
+### Strobe overlay (T20 + Bullseye 50p)
+Vid Triple 20 och Bullseye 50p triggas en extra strobe-effekt (LED Strobe Fast, 1/5/3) ovanpå den vanliga färgen. Stroben körs i 3 sekunder och togglas sedan av automatiskt — färgen (röd/bullseye) lyser kvar.
+
+- Config: `colorMode.triple20Strobe` med `executor` och `durationMs`
+- State: `strobeTimer` — global timer som rensas vid takeout, reconnect och SIGINT
+- Om ny strobe triggas medan en pågår → föregående rensas först (toggle av + clearTimeout)
 
 ### KNX-interaktion med LightShark
 KNX har en extern fysisk länk till LightShark. Detta innebär:
@@ -105,6 +113,7 @@ KNX har en extern fysisk länk till LightShark. Detta innebär:
 - `lastTriggeredExecutor` - Sparar senast triggade executor för att kunna släcka vid nästa kast/takeout
 - `lastSpecialExecutors[]` - Sparar 180-executors för att kunna toggla av vid takeout
 - `knxLightsOff` - Boolean som spårar om KNX har släckt lamporna (true efter miss)
+- `strobeTimer` - Timer för T20/Bullseye strobe auto-off (rensas vid takeout/reconnect/SIGINT)
 - `throwHistory[]` - Sparar de senaste 100 kasten (för special events). Sentinels på kastobjekt förhindrar dubbletter: `_180played`, `_120played`, `_123played`, `_threeOnesPlayed`, `threeMissPlayed`
 - Alla state-variabler nollställs vid WebSocket-reconnect (`ws.on('close')`)
 
@@ -112,22 +121,20 @@ KNX har en extern fysisk länk till LightShark. Detta innebär:
 
 Baserat på användarens setup:
 
-| Col | Row 1 | Row 2 | Row 3 | Row 4 | Row 5 | Row 6 | Row 7 |
-|-----|-------|-------|-------|-------|-------|-------|-------|
-| 1 | 3k 100% | 3k Col 1 | 3k Col 2 | Colour | Disco | 3k 50% | - |
-| 2 | LED Red | LED Green | LED Blue | LED Cyan | LED Mag | LED Lav Led | - |
-| 3 | Led Red Amb | LED Amb Lav | LED Gul Mag | LED Blue Mag | LED Lav Mag | LED Mag Green | - |
-| 4 | LED Red Chase | LED Green Chase | LED Blue Chase | LED Cyan Chase | LED Mag Chase | LED Lav Chase | - |
-| 5 | LED Sound Red | LED Sound Green | LED Sound Blue | LED Sound Cyan | LED Sound Mag | LED Sound Multi Col | - |
-| 6 | LED Ow Strobe | LED Rnd Strobe | LED Col Strobe | LED Col Rnd Strobe | Moln Col Chase | Moln Ow Strobe | - |
-| 7 | LED Speed x2 | LED Speed x4 | LED Speed x6 | LED Speed STOP | - | - | - |
-| 8 | LED Dim 75 | LED Dim 50 | LED Dim 25 | LED Dim OFF | - | - | - |
+| Col | Row 1 | Row 2 | Row 3 | Row 4 | Row 5 | Row 6 |
+|-----|-------|-------|-------|-------|-------|-------|
+| 1 | 3k 100% | 3k Col | Color 1 | Colour 2 | Colour 3 | Neon Fire |
+| 2 | LED Red | LED Green | LED Blue | LED Cyan | LED Mag | LED Lav |
+| 3 | Led Pink Amb | LED Amb Lav | LED Mag Yell | LED Blue Mag | LED Lav Red | LED Mag Green |
+| 4 | - | - | - | - | - | - |
+| 5 | Strobe OFF | LED Strobe Slow | LED Strobe Fast | - | - | - |
 
 ### Viktiga executors i nuvarande config
 - **3k 100%** (1/1/1) - Basbelysning, alltid på
 - **LED Red** (1/2/1) - Röd färg för röda segment
 - **LED Green** (1/2/2) - Grön färg för gröna segment
 - **Moln Ow Strobe** (1/6/6) - Bullseye 50p effekt
+- **LED Strobe Fast** (1/5/3) - Strobe overlay för T20 och Bullseye (3s timed)
 - **LED Dim OFF** (1/8/4) - Släcker lampor (miss)
 - **LED Ow Rnd Strobe** (1/6/2) - 180-effekt (del 1)
 - **LED Speed x4** (1/7/2) - 180-effekt (del 2)
@@ -184,7 +191,11 @@ Baserat på användarens setup:
         "bullseyeExecutor": { "page": 1, "column": 6, "row": 6 },
         "redSegments": [20, 18, 13, 10, 2, 3, 7, 8, 14, 12],
         "greenSegments": [1, 4, 6, 15, 17, 19, 16, 11, 9, 5],
-        "bull25": "green"
+        "bull25": "green",
+        "triple20Strobe": {
+          "executor": { "page": 1, "column": 5, "row": 3 },
+          "durationMs": 3000
+        }
       },
       "noScoreExecutor": { "page": 1, "column": 8, "row": 4 }
     }
@@ -216,7 +227,7 @@ Baserat på användarens setup:
     "enabled": true,
     "soundsDir": "./sounds",
     "sounds": {
-      "miss": { "file": "BInjur2.wav" },
+      "miss": { "file": "miss.wav" },
       "bullseye": { "file": "headshot.wav" },
       "bull25": { "file": "ultrakill.wav" },
       "double": { "file": "doublekill.wav" },
@@ -285,7 +296,7 @@ Triggas parallellt med ljuseffekter (fire-and-forget) i `handleThrowDetected()`:
 4. 3x singel 1 → 'three_ones' (sad trombone)
 5. Tre missar i rad → 'lostmatch'
 // Om inget special event spelades:
-3. Miss → 'miss' (BInjur2.wav)
+3. Miss → 'miss' (miss.wav)
 4. Bullseye 50p → 'bullseye' (headshot.wav)
 5. Bull 25p → 'bull25' (ultrakill.wav)
 6. Trippel → 'triple_{segment}' med fallback till 'triple'
