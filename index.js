@@ -116,7 +116,7 @@ function connectToScolia() {
       const message = JSON.parse(data.toString());
       handleScoliaMessage(message);
     } catch (err) {
-      logger.error('Fel vid parsning av meddelande:', err.message);
+      logger.error('Fel vid hantering av meddelande:', err.message);
     }
   });
 
@@ -135,11 +135,12 @@ function connectToScolia() {
 
     // Återanslut efter delay
     if (!reconnectTimeout) {
+      const jitter = Math.floor(Math.random() * 2000);
       reconnectTimeout = setTimeout(() => {
         reconnectTimeout = null;
         logger.info('Försöker återansluta...');
         connectToScolia();
-      }, config.scolia.reconnectDelay);
+      }, config.scolia.reconnectDelay + jitter);
     }
   });
 }
@@ -452,6 +453,7 @@ process.on('SIGINT', async () => {
   if (knxController) knxController.disconnect();
   if (playwrightController) await playwrightController.close();
   if (reconnectTimeout) clearTimeout(reconnectTimeout);
+  logger.close();
 
   process.exit(0);
 });

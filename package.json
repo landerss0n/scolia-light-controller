@@ -22,11 +22,11 @@
     "node": ">=18"
   },
   "dependencies": {
-    "knx": "^2.5.4",
-    "node-osc": "^9.0.0",
-    "play-sound": "^1.1.6",
-    "playwright": "^1.58.2",
-    "ws": "^8.16.0"
+    "knx": "2.5.4",
+    "node-osc": "9.1.7",
+    "play-sound": "1.1.6",
+    "playwright": "1.58.2",
+    "ws": "8.19.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
