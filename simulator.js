@@ -5,6 +5,7 @@ const fs = require('fs');
 const { LightSharkController } = require('./lib/lightshark');
 const { SoundController } = require('./lib/sound');
 const { Logger } = require('./lib/logger');
+const { resolveThrowEffect, applyExecutor } = require('./lib/effects');
 
 // Ladda konfiguration
 const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
@@ -89,58 +90,27 @@ function simulateThrow(throwData) {
   console.log(`   Poäng: ${points}`);
   console.log('═══════════════════════════════════════\n');
 
-  // ColorMode ljuslogik (samma som index.js)
+  // ColorMode ljuslogik (delad med index.js via lib/effects.js)
   if (config.lightshark.throwEffect?.enabled && lightshark) {
     const effect = config.lightshark.throwEffect;
-    let execToTrigger = null;
-    let effectName = '';
+    const result = resolveThrowEffect(points, multiplier, segment, effect);
 
-    if (points === 0 && effect.noScoreExecutor) {
-      execToTrigger = effect.noScoreExecutor;
-      effectName = '❌ NOSCORE - Släcker lampor';
-    } else if (effect.colorMode?.enabled) {
-      const cm = effect.colorMode;
-
-      if (points === 50) {
-        execToTrigger = cm.bullseyeExecutor || cm.redExecutor;
-        effectName = '🎯 BULLSEYE 50! Moln Ow Strobe';
-      } else if (points === 25 && segment === 25) {
-        execToTrigger = cm.bull25 === 'green' ? cm.greenExecutor : cm.redExecutor;
-        effectName = `🎯 BULL 25! LED ${cm.bull25 === 'green' ? 'Green' : 'Red'}`;
-      } else if ((multiplier === 2 || multiplier === 3) && cm.redSegments.includes(segment)) {
-        execToTrigger = cm.redExecutor;
-        const typeStr = multiplier === 3 ? 'TRIPPEL' : 'DUBBEL';
-        effectName = `🔴 ${typeStr} ${segment} - LED Red`;
-      } else if ((multiplier === 2 || multiplier === 3) && cm.greenSegments.includes(segment)) {
-        execToTrigger = cm.greenExecutor;
-        const typeStr = multiplier === 3 ? 'TRIPPEL' : 'DUBBEL';
-        effectName = `🟢 ${typeStr} ${segment} - LED Green`;
-      } else if (multiplier === 1) {
+    if (result) {
+      if (result.isSingle) {
         if (lastTriggeredExecutor) {
-          console.log(`⚪ SINGEL ${segment} - Släcker senaste färg`);
+          console.log(`${result.effectName} - Släcker senaste färg`);
           lightshark.triggerExecutor(lastTriggeredExecutor.page, lastTriggeredExecutor.column, lastTriggeredExecutor.row);
           lastTriggeredExecutor = null;
         } else {
-          console.log(`⚪ SINGEL ${segment} - (3k 100% redan på)`);
+          console.log(`${result.effectName} - (3k 100% redan på)`);
         }
-      }
-    }
-
-    if (execToTrigger) {
-      const sameAsLast = lastTriggeredExecutor &&
-        lastTriggeredExecutor.page === execToTrigger.page &&
-        lastTriggeredExecutor.column === execToTrigger.column &&
-        lastTriggeredExecutor.row === execToTrigger.row;
-
-      if (sameAsLast) {
-        console.log(`${effectName} (redan aktiv, skippar)`);
-      } else {
-        if (lastTriggeredExecutor) {
-          lightshark.triggerExecutor(lastTriggeredExecutor.page, lastTriggeredExecutor.column, lastTriggeredExecutor.row);
+      } else if (result.executor) {
+        const prev = lastTriggeredExecutor;
+        lastTriggeredExecutor = applyExecutor(lightshark, result.executor, lastTriggeredExecutor,
+          (msg) => console.log(`💡 ${result.effectName}: ${msg}`));
+        if (prev === lastTriggeredExecutor) {
+          console.log(`${result.effectName} (redan aktiv, skippar)`);
         }
-        console.log(`💡 ${effectName}: Page ${execToTrigger.page}, Col ${execToTrigger.column}, Row ${execToTrigger.row}`);
-        lightshark.triggerExecutor(execToTrigger.page, execToTrigger.column, execToTrigger.row);
-        lastTriggeredExecutor = execToTrigger;
       }
     }
   }

@@ -1,6 +1,6 @@
 # Scolia Light Controller
 
-Styr LightShark-belysning i realtid baserat på Scolia darttavla-events via OSC.
+Styr LightShark-belysning och ljudeffekter i realtid baserat på Scolia darttavla-events.
 
 ## Funktioner
 
@@ -20,24 +20,17 @@ Styr LightShark-belysning i realtid baserat på Scolia darttavla-events via OSC.
   - Generella ljud för dubblar (Double Kill), tripplar (Triple Kill)
   - Bullseye → Headshot, Bull 25 → Ultrakill, Miss → BInjur2
   - 180 → Monster Kill, Tre missar i rad → Lost Match
-  - Bust → Tjockis, Win → Monster Kill
   - Takeout (pilar tas ut) → Draw
   - Volymstöd per ljud (macOS)
+- **Playwright DOM-övervakning** - Övervakar Scolias webbapp för spelhändelser:
+  - Bust-detection → Tjockis-ljud
+  - Leg won / Set won → Vinst-ljud
+  - Auto-login, cookie-hantering, fullscreen
+  - Auto-klick på "Finish & View Stats", board selection
 - **Auto-reset** - Lampor återgår till 3k 100% när pilar tas ut
 - **Random Executor Mode** - Slumpmässig executor vid varje kast (för test)
 - **180 Detection** - Special-effekt vid 180 poäng
 - **Tre missar-detection** - Special-ljud vid 3 missar i rad
-- **Game Tracking** - Poängspårning med bust-detection:
-  - 1–4 spelare med konfigurerbart startpoäng (170, 301, 501 etc.)
-  - Single/Double out
-  - Automatisk bust-detection (under 0, exakt 1 vid double out, exakt 0 utan dubbel)
-  - Auto-advance efter 3 kast, manuell spelarväxling vid behov
-  - Ångra senaste kast
-- **Webapp** - Next.js-webapp för att styra spelet från valfri enhet på nätverket:
-  - Starta/konfigurera spel
-  - Live poängställning via SSE (Server-Sent Events)
-  - Manuellt kast-pad för test utan tavla
-  - Dark mode, mobilanpassad
 
 ## Systemkrav
 
@@ -49,83 +42,26 @@ Styr LightShark-belysning i realtid baserat på Scolia darttavla-events via OSC.
 
 ## Installation
 
-### 1. Klona repot
-
 ```bash
 git clone <repo-url>
 cd "Scolia API"
-```
-
-### 2. Installera API-dependencies
-
-```bash
 npm install
 ```
 
-Detta installerar:
+Dependencies:
 - `ws` — WebSocket-klient för Scolia
 - `node-osc` — OSC/UDP för LightShark
-- `express` + `cors` — REST API + SSE
+- `playwright` — Browser-automation för bust/win-detection
 - `play-sound` — Ljuduppspelning (macOS/Linux)
 - `knx` — KNX IP-gateway kommunikation
 
-### 3. Installera webapp-dependencies
-
-```bash
-cd webapp
-npm install
-cd ..
-```
-
-Webapp använder Next.js 16, React 19, Tailwind v4, shadcn/ui och Radix UI.
-
-### 4. Konfigurera
+## Konfiguration
 
 Kopiera `config.example.json` till `config.json` och fyll i:
 
 ```bash
 cp config.example.json config.json
 ```
-
-Fyll i ditt Scolia-serienummer och access token (se [Konfiguration](#konfiguration) nedan).
-
-### 5. Starta
-
-```bash
-# Terminal 1 — API (ljus + ljud + spelspårning + REST)
-npm start
-
-# Terminal 2 — Webapp
-cd webapp && npm run dev
-```
-
-API:t startar på port 3000, webapp på port 3001.
-Webapp nås på `http://<din-ip>:3001` från valfri enhet på nätverket.
-
-**OBS:** API:t dödar automatiskt gamla instanser på samma port vid start.
-
-## Snabbstart
-
-```bash
-# Installera allt
-npm install && cd webapp && npm install && cd ..
-
-# Starta API
-npm start
-
-# Starta webapp (separat terminal)
-cd webapp && npm run dev
-
-# Testa utan darttavla
-npm run simulate
-
-# Testa LightShark-anslutning
-npm test
-```
-
-## Konfiguration
-
-Redigera `config.json`:
 
 ### Scolia-inställningar
 ```json
@@ -158,13 +94,21 @@ Sätt `simulationMode: true` för att köra utan Scolia-anslutning.
 }
 ```
 
-### Game Tracking
+### Playwright-inställningar
 ```json
-"game": {
+"playwright": {
   "enabled": true,
-  "apiPort": 3000
+  "url": "https://game.scoliadarts.com",
+  "fullscreen": true,
+  "pollIntervalMs": 200,
+  "credentials": {
+    "email": "din@email.com",
+    "password": "ditt-lösenord"
+  }
 }
 ```
+
+Playwright öppnar Scolias webbapp i Chromium och övervakar DOM för bust/leg-won/set-won. Cookies sparas automatiskt för att undvika inloggning vid omstart.
 
 ### Ljudeffekter
 ```json
@@ -183,7 +127,8 @@ Sätt `simulationMode: true` för att köra utan Scolia-anslutning.
     "three_misses": { "file": "lostmatch.wav" },
     "takeout": { "file": "draw.wav", "volume": 0.25 },
     "bust": { "file": "tjockis.wav", "volume": 2.0 },
-    "win": { "file": "monsterkill.wav" }
+    "leg_won": { "file": "set_won.wav" },
+    "set_won": { "file": "monsterkill.wav" }
   }
 }
 ```
@@ -221,44 +166,28 @@ Executors adresseras med `page`, `column`, `row` som motsvarar LightShark-gridde
 
 ```
 Scolia API/
-├── index.js              # Huvudapp - WebSocket, ljus, ljud, spelspårning, REST API + SSE
+├── index.js              # Huvudapp — WebSocket, ljus, ljud, Playwright
 ├── simulator.js          # Testa ljuseffekter utan darttavla
 ├── test-connection.js    # Testa LightShark-anslutning
 ├── knx-monitor.js        # Verktyg: lyssna på KNX-buss för att hitta gruppadresser
+├── plejd_control.py      # Plejd BLE-styrning (Python)
 ├── config.json           # Konfiguration (gitignored, se config.example.json)
 ├── lib/
 │   ├── lightshark.js     # OSC-kommunikation med LightShark
+│   ├── playwright.js     # Playwright DOM-övervakning (bust/win-detection)
 │   ├── knx.js            # KNX IP-gateway kommunikation
 │   ├── sound.js          # Ljuduppspelning (cross-platform, volymstöd)
 │   └── logger.js         # Loggning
 ├── sounds/               # WAV-filer för ljudeffekter
-├── webapp/               # Next.js webapp (shadcn/ui, Tailwind v4, dark mode)
-│   ├── src/app/          # App Router sidor
-│   ├── src/components/   # UI-komponenter (game-view, setup-form, throw-pad)
-│   └── src/lib/api.ts    # API-klient mot Express REST API (SSE)
 └── CLAUDE.md             # Projektkontext för AI-assistans
 ```
-
-## REST API
-
-API:t körs på port 3000 (konfigureras i `config.json` → `game.apiPort`).
-
-| Metod | Endpoint | Beskrivning |
-|-------|----------|-------------|
-| GET | `/api/game` | Hämta aktuell spelstate |
-| GET | `/api/game/events` | SSE-stream för live-uppdateringar |
-| POST | `/api/game/start` | Starta nytt spel `{ startScore, players[], doubleOut }` |
-| POST | `/api/game/reset` | Nollställ pågående spel |
-| POST | `/api/game/next-player` | Byt till nästa spelare |
-| POST | `/api/game/undo` | Ångra senaste kastet |
-| POST | `/api/game/throw` | Simulera kast `{ sector }` (t.ex. "t20", "d16", "25", "None") |
-| GET | `/api/game/history` | Senaste 50 kasten |
 
 ## Protokoll
 
 - **Scolia** → WebSocket (wss://game.scoliadarts.com)
 - **LightShark** → OSC/UDP (port 8000)
 - **KNX** → KNXnet/IP (port 3671)
+- **Playwright** → Chromium (DOM-polling mot Scolias webbapp)
 
 ## Användning
 
@@ -266,7 +195,7 @@ API:t körs på port 3000 (konfigureras i `config.json` → `game.apiPort`).
 ```bash
 npm start
 ```
-Ansluter till Scolia och triggar ljuseffekter vid varje kast.
+Ansluter till Scolia och triggar ljuseffekter vid varje kast. Om Playwright är aktiverat öppnas Scolias webbapp i Chromium för bust/win-detection.
 
 ### Simulator
 ```bash
@@ -297,8 +226,8 @@ Testar att LightShark är nåbar via OSC.
 2. Kontrollera att executorn finns och är aktiv i LightShark
 3. Testa med simulatorn först
 
-### Port redan upptagen
-API:t dödar automatiskt gamla instanser på samma port vid start. Om det inte fungerar:
-```bash
-lsof -ti :3000 | xargs kill
-```
+### Playwright-problem
+1. Kontrollera att `playwright` är installerat (`npx playwright install chromium`)
+2. Verifiera credentials i `config.json` → `playwright.credentials`
+3. Ta bort `scolia-cookies.json` för att tvinga ny inloggning
+4. Kolla loggar — Playwright loggar alla state-ändringar

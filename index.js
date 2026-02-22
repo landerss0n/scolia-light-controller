@@ -1,31 +1,15 @@
 #!/usr/bin/env node
 
-const { execSync } = require('child_process');
+const crypto = require('crypto');
 const WebSocket = require('ws');
 const fs = require('fs');
-const express = require('express');
-const cors = require('cors');
 const { LightSharkController } = require('./lib/lightshark');
 const { SoundController } = require('./lib/sound');
 const { KnxController } = require('./lib/knx');
 const { PlaywrightController } = require('./lib/playwright');
 const { Logger } = require('./lib/logger');
-
-// Döda gamla instanser som lyssnar på samma port
-function killOldInstances(port) {
-  try {
-    const pids = execSync(`lsof -ti :${port} 2>/dev/null`, { encoding: 'utf8' }).trim();
-    if (pids) {
-      const pidList = pids.split('\n').filter(p => p && p !== String(process.pid));
-      if (pidList.length > 0) {
-        execSync(`kill ${pidList.join(' ')} 2>/dev/null`);
-        console.log(`Dödade gamla instanser på port ${port}: PID ${pidList.join(', ')}`);
-      }
-    }
-  } catch {
-    // Inga gamla instanser
-  }
-}
+const { parseSector } = require('./lib/sector');
+const { resolveThrowEffect, applyExecutor } = require('./lib/effects');
 
 // Ladda konfiguration
 const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
@@ -42,258 +26,6 @@ let ws = null;
 let reconnectTimeout = null;
 let throwHistory = [];
 let lastTriggeredExecutor = null; // Spara senaste executor för att kunna släcka vid takeout
-
-// ═══════════════════════════════════════
-// Spelstate
-// ═══════════════════════════════════════
-let gameState = {
-  active: false,
-  players: [],           // [{ name, score }]
-  currentPlayer: 0,
-  throwsInTurn: 0,
-  turnStartScore: 0,
-  turnThrows: [],        // kast i nuvarande tur
-  turnAdvanced: false,   // true om turen redan bytts (3 kast eller bust)
-  startScore: 501,
-  doubleOut: false,
-  winner: null,
-};
-
-// SSE-klienter för live-uppdateringar
-let sseClients = [];
-
-function broadcastGameState() {
-  const data = JSON.stringify(getGameStateResponse());
-  sseClients = sseClients.filter(res => {
-    try {
-      res.write(`data: ${data}\n\n`);
-      return true;
-    } catch {
-      return false;
-    }
-  });
-}
-
-function getGameStateResponse() {
-  return {
-    active: gameState.active,
-    players: gameState.players,
-    currentPlayer: gameState.currentPlayer,
-    throwsInTurn: gameState.throwsInTurn,
-    turnThrows: gameState.turnThrows,
-    startScore: gameState.startScore,
-    doubleOut: gameState.doubleOut,
-    winner: gameState.winner,
-  };
-}
-
-// ═══════════════════════════════════════
-// Express REST API
-// ═══════════════════════════════════════
-function startApiServer() {
-  if (!config.game?.enabled) return;
-
-  const app = express();
-  app.use(cors());
-  app.use(express.json());
-
-  // Hämta spelstate
-  app.get('/api/game', (req, res) => {
-    res.json(getGameStateResponse());
-  });
-
-  // SSE endpoint för live-uppdateringar
-  app.get('/api/game/events', (req, res) => {
-    res.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-    });
-    res.write(`data: ${JSON.stringify(getGameStateResponse())}\n\n`);
-    sseClients.push(res);
-    req.on('close', () => {
-      sseClients = sseClients.filter(c => c !== res);
-    });
-  });
-
-  // Starta nytt spel
-  app.post('/api/game/start', (req, res) => {
-    const { startScore = 501, players = ['Spelare 1'], doubleOut = false } = req.body;
-
-    if (!Array.isArray(players) || players.length < 1 || players.length > 4) {
-      return res.status(400).json({ error: 'Ange 1-4 spelare' });
-    }
-
-    gameState = {
-      active: true,
-      players: players.map(name => ({ name, score: startScore })),
-      currentPlayer: 0,
-      throwsInTurn: 0,
-      turnStartScore: startScore,
-      turnThrows: [],
-      turnAdvanced: false,
-      startScore,
-      doubleOut,
-      winner: null,
-    };
-
-    // Nollställ throw-historik för nytt spel
-    throwHistory = [];
-
-    logger.info(`🎮 Nytt spel startat! ${startScore} | ${players.length} spelare | Double out: ${doubleOut}`);
-    broadcastGameState();
-    res.json(getGameStateResponse());
-  });
-
-  // Nollställ spel
-  app.post('/api/game/reset', (req, res) => {
-    gameState = {
-      active: false,
-      players: [],
-      currentPlayer: 0,
-      throwsInTurn: 0,
-      turnStartScore: 0,
-      turnThrows: [],
-      turnAdvanced: false,
-      startScore: 501,
-      doubleOut: false,
-      winner: null,
-    };
-    throwHistory = [];
-    logger.info('🔄 Spel nollställt');
-    broadcastGameState();
-    res.json({ ok: true });
-  });
-
-  // Nästa spelare manuellt (t.ex. om Scolia inte detekterar takeout)
-  app.post('/api/game/next-player', (req, res) => {
-    if (!gameState.active) {
-      return res.status(400).json({ error: 'Inget spel pågår' });
-    }
-    advanceTurn();
-    broadcastGameState();
-    res.json(getGameStateResponse());
-  });
-
-  // Ångra senaste kast
-  app.post('/api/game/undo', (req, res) => {
-    if (!gameState.active) {
-      return res.status(400).json({ error: 'Inget spel pågår' });
-    }
-    if (gameState.turnThrows.length === 0) {
-      return res.status(400).json({ error: 'Inga kast att ångra' });
-    }
-
-    const lastThrow = gameState.turnThrows.pop();
-    gameState.players[gameState.currentPlayer].score += lastThrow.points;
-    gameState.throwsInTurn--;
-    if (throwHistory.length > 0) throwHistory.pop();
-
-    logger.info(`↩️ Ångrade kast: ${lastThrow.points}p`);
-    broadcastGameState();
-    res.json(getGameStateResponse());
-  });
-
-  // Simulera kast manuellt
-  app.post('/api/game/throw', (req, res) => {
-    const { sector, coordinates, bounceout } = req.body;
-    if (!sector) {
-      return res.status(400).json({ error: 'Ange sector (t.ex. "s20", "d16", "t19", "Bull", "None")' });
-    }
-    handleThrowDetected({ sector, coordinates: coordinates || [0, 0], bounceout: bounceout || false });
-    res.json(getGameStateResponse());
-  });
-
-  // Kasthistorik
-  app.get('/api/game/history', (req, res) => {
-    res.json(throwHistory.slice(-50));
-  });
-
-  const port = config.game.apiPort || 3000;
-  killOldInstances(port);
-  app.listen(port, '0.0.0.0', () => {
-    logger.success(`✓ REST API lyssnar på port ${port}`);
-  });
-}
-
-// ═══════════════════════════════════════
-// Spellogik
-// ═══════════════════════════════════════
-function handleGameThrow(points, multiplier, segment) {
-  if (!gameState.active || gameState.winner) return { bust: false, win: false };
-
-  // Nytt kast = turen har inte bytts ännu
-  gameState.turnAdvanced = false;
-
-  const player = gameState.players[gameState.currentPlayer];
-  const newScore = player.score - points;
-
-  // Bust-kontroll
-  if (newScore < 0) {
-    // Bust: under 0
-    logger.warn(`💥 BUST! ${player.name} hade ${player.score}, kastade ${points} → under 0`);
-    revertTurn();
-    return { bust: true, win: false };
-  }
-
-  if (newScore === 1 && gameState.doubleOut) {
-    // Bust: kan inte checka ut med 1 kvar vid double out
-    logger.warn(`💥 BUST! ${player.name} hade ${player.score}, kastade ${points} → 1 kvar (double out)`);
-    revertTurn();
-    return { bust: true, win: false };
-  }
-
-  if (newScore === 0 && gameState.doubleOut && multiplier !== 2) {
-    // Bust: måste checka ut med dubbel
-    logger.warn(`💥 BUST! ${player.name} nådde 0 men inte med dubbel (double out)`);
-    revertTurn();
-    return { bust: true, win: false };
-  }
-
-  // Giltigt kast - dra av poäng
-  player.score = newScore;
-  gameState.throwsInTurn++;
-  gameState.turnThrows.push({ points, multiplier, segment });
-
-  // Vinst?
-  if (newScore === 0) {
-    gameState.winner = gameState.currentPlayer;
-    logger.success(`🏆 ${player.name} VINNER! Checked out!`);
-    return { bust: false, win: true };
-  }
-
-  // Auto-avancera efter 3 kast
-  if (gameState.throwsInTurn >= 3) {
-    advanceTurn();
-  }
-
-  return { bust: false, win: false };
-}
-
-function revertTurn() {
-  // Återställ alla kast i denna tur
-  const player = gameState.players[gameState.currentPlayer];
-  player.score = gameState.turnStartScore;
-  gameState.turnThrows = [];
-  gameState.throwsInTurn = 0;
-  // Avancera till nästa spelare
-  advanceTurn();
-}
-
-function advanceTurn() {
-  gameState.turnAdvanced = true;
-  if (gameState.players.length <= 1) {
-    gameState.throwsInTurn = 0;
-    gameState.turnThrows = [];
-    gameState.turnStartScore = gameState.players[0]?.score || 0;
-    return;
-  }
-  gameState.currentPlayer = (gameState.currentPlayer + 1) % gameState.players.length;
-  gameState.throwsInTurn = 0;
-  gameState.turnThrows = [];
-  gameState.turnStartScore = gameState.players[gameState.currentPlayer].score;
-  logger.info(`👉 Tur: ${gameState.players[gameState.currentPlayer].name}`);
-}
 
 // Random executor helper
 function getRandomExecutor() {
@@ -446,12 +178,6 @@ function handleScoliaMessage(message) {
         lightshark.triggerExecutor(lastTriggeredExecutor.page, lastTriggeredExecutor.column, lastTriggeredExecutor.row);
         lastTriggeredExecutor = null;
       }
-      // Byt spelare vid takeout — men bara om turen inte redan bytts
-      // (efter 3 kast eller bust har advanceTurn() redan körts)
-      if (gameState.active && !gameState.winner && !gameState.turnAdvanced) {
-        advanceTurn();
-        broadcastGameState();
-      }
       break;
 
     case 'ACKNOWLEDGED':
@@ -465,34 +191,6 @@ function handleScoliaMessage(message) {
     default:
       logger.info('Okänt meddelande:', message.type, JSON.stringify(message.payload || {}));
   }
-}
-
-// Parsa sektor-sträng från Scolia (t.ex. "s14", "d20", "t19", "bull")
-function parseSector(sector) {
-  if (!sector) return { points: 0, multiplier: 0, segment: 0 };
-
-  const s = sector.toLowerCase();
-
-  // Bull (inner/outer bestäms av Scolia via multiplier i payload)
-  if (s === 'bull' || s === '25' || s === '50') {
-    return { points: 25, multiplier: 1, segment: 25 };
-  }
-
-  // Miss
-  if (s === 'none' || s === 'miss' || s === '0') {
-    return { points: 0, multiplier: 0, segment: 0 };
-  }
-
-  // Single (s), Double (d), Triple (t) - t.ex. "s20", "d16", "t19"
-  const match = s.match(/^([sdt])(\d+)$/);
-  if (match) {
-    const type = match[1];
-    const seg = parseInt(match[2]);
-    const mult = type === 't' ? 3 : type === 'd' ? 2 : 1;
-    return { points: seg * mult, multiplier: mult, segment: seg };
-  }
-
-  return { points: 0, multiplier: 0, segment: 0 };
 }
 
 // Hantera dart-kast
@@ -529,99 +227,35 @@ function handleThrowDetected(payload) {
   throwHistory.push({ segment, multiplier, points, timestamp: Date.now() });
   if (throwHistory.length > 100) throwHistory.shift();
 
-  // ═══ Spellogik (bust-detection) ═══
-  let bustOccurred = false;
-  let winOccurred = false;
-
-  if (gameState.active && !gameState.winner) {
-    const result = handleGameThrow(points, multiplier, segment);
-    bustOccurred = result.bust;
-    winOccurred = result.win;
-    broadcastGameState();
-  }
-
   // Kolla om throwEffect mode är aktivt (trigga effekt + reset efter delay)
   if (config.lightshark.throwEffect?.enabled) {
     const effect = config.lightshark.throwEffect;
-    let execToTrigger = null;
-    let effectName = '';
+    const result = resolveThrowEffect(points, multiplier, segment, effect);
 
-    // Noscore (miss) - Släcker via LightShark noScoreExecutor
-    if (points === 0) {
-      execToTrigger = effect.noScoreExecutor;
-      effectName = '❌ NOSCORE! Släcker lampor';
-    }
-    // Färgläge baserat på darttavlans färger (endast dubbel/trippel)
-    else if (effect.colorMode?.enabled) {
-      const cm = effect.colorMode;
-
-      // Bullseye 50 (inner bull) - Moln Ow Strobe
-      if (points === 50) {
-        execToTrigger = cm.bullseyeExecutor || cm.redExecutor;
-        effectName = `🎯 BULLSEYE 50! Moln Ow Strobe`;
-      }
-      // Bull 25 (outer bull) - grön
-      else if (points === 25 && segment === 25) {
-        execToTrigger = cm.bull25 === 'green' ? cm.greenExecutor : cm.redExecutor;
-        effectName = `🎯 BULL 25! LED ${cm.bull25 === 'green' ? 'Green' : 'Red'}`;
-      }
-      // Dubbel eller Trippel på rött segment
-      else if ((multiplier === 2 || multiplier === 3) && cm.redSegments.includes(segment)) {
-        execToTrigger = cm.redExecutor;
-        const typeStr = multiplier === 3 ? 'TRIPPEL' : 'DUBBEL';
-        effectName = `🔴 ${typeStr} ${segment} - LED Red`;
-      }
-      // Dubbel eller Trippel på grönt segment
-      else if ((multiplier === 2 || multiplier === 3) && cm.greenSegments.includes(segment)) {
-        execToTrigger = cm.greenExecutor;
-        const typeStr = multiplier === 3 ? 'TRIPPEL' : 'DUBBEL';
-        effectName = `🟢 ${typeStr} ${segment} - LED Green`;
-      }
-      // Singel - släck senaste färgen så 3k 100% syns
-      else if (multiplier === 1) {
+    if (result) {
+      if (result.isSingle) {
+        // Singel — släck senaste färg så 3k 100% syns
         if (lastTriggeredExecutor) {
-          logger.info(`⚪ SINGEL ${segment} - Släcker senaste färg`);
+          logger.info(`${result.effectName} - Släcker senaste färg`);
           lightshark.triggerExecutor(lastTriggeredExecutor.page, lastTriggeredExecutor.column, lastTriggeredExecutor.row);
           lastTriggeredExecutor = null;
         } else {
-          logger.info(`⚪ SINGEL ${segment} - (3k 100% redan på)`);
+          logger.info(`${result.effectName} - (3k 100% redan på)`);
         }
-        execToTrigger = null;
-      }
-      // Fallback
-      else {
-        execToTrigger = effect.resetExecutor;
-        effectName = '💡 3k 100% (fallback)';
-      }
-    }
-    // Fallback till Disco
-    else {
-      execToTrigger = effect.executor;
-      effectName = '💡 Triggar Disco';
-    }
-
-    if (execToTrigger && lightshark) {
-      // Kolla om samma executor redan är aktiv - skippa då för att undvika toggle
-      const sameAsLast = lastTriggeredExecutor &&
-        lastTriggeredExecutor.page === execToTrigger.page &&
-        lastTriggeredExecutor.column === execToTrigger.column &&
-        lastTriggeredExecutor.row === execToTrigger.row;
-
-      if (sameAsLast) {
-        logger.info(`${effectName} (redan aktiv, skippar)`);
+      } else if (result.executor) {
+        const prev = lastTriggeredExecutor;
+        lastTriggeredExecutor = applyExecutor(lightshark, result.executor, lastTriggeredExecutor,
+          (msg) => logger.info(`${result.effectName}: ${msg}`));
+        if (prev === lastTriggeredExecutor) {
+          logger.info(`${result.effectName} (redan aktiv, skippar)`);
+        }
       } else {
-        // Släck tidigare executor först om det finns en
-        if (lastTriggeredExecutor) {
-          lightshark.triggerExecutor(lastTriggeredExecutor.page, lastTriggeredExecutor.column, lastTriggeredExecutor.row);
-        }
-        logger.info(`${effectName}: Page ${execToTrigger.page}, Col ${execToTrigger.column}, Row ${execToTrigger.row}`);
-        lightshark.triggerExecutor(execToTrigger.page, execToTrigger.column, execToTrigger.row);
-        lastTriggeredExecutor = execToTrigger;
+        logger.info(result.effectName);
       }
     }
 
     // KNX: återställ lampor vid singel/icke-färg-kast efter miss (färger funkar utan allOn)
-    if (knxController && knxLightsOff && points > 0 && !execToTrigger) {
+    if (knxController && knxLightsOff && points > 0 && (!result || !result.executor)) {
       knxController.triggerAction('allOn');
       knxLightsOff = false;
     }
@@ -645,26 +279,20 @@ function handleThrowDetected(payload) {
   const specialPlayed = checkSpecialEvents();
 
   // Trigga ljud (fire-and-forget, parallellt med ljus)
-  // Om Playwright är aktivt hanterar den bust/win-ljud via DOM-övervakning
-  if (sound) {
-    if (bustOccurred && !playwrightController) {
-      sound.playSound('bust');
-    } else if (winOccurred && !playwrightController) {
-      sound.playSound('win');
-    } else if (!specialPlayed) {
-      if (points === 0) {
-        sound.playSound('miss');
-      } else if (points === 50) {
-        sound.playSound('bullseye');
-      } else if (points === 25 && segment === 25) {
-        sound.playSound('bull25');
-      } else if (multiplier === 3) {
-        sound.playSoundWithFallback(`triple_${segment}`, 'triple');
-      } else if (multiplier === 2) {
-        sound.playSoundWithFallback(`double_${segment}`, 'double');
-      } else if (multiplier === 1 && points === 1) {
-        sound.playSound('single_1');
-      }
+  // Bust/win-ljud hanteras av Playwright via DOM-övervakning
+  if (sound && !specialPlayed) {
+    if (points === 0) {
+      sound.playSound('miss');
+    } else if (points === 50) {
+      sound.playSound('bullseye');
+    } else if (points === 25 && segment === 25) {
+      sound.playSound('bull25');
+    } else if (multiplier === 3) {
+      sound.playSoundWithFallback(`triple_${segment}`, 'triple');
+    } else if (multiplier === 2) {
+      sound.playSoundWithFallback(`double_${segment}`, 'double');
+    } else if (multiplier === 1 && points === 1) {
+      sound.playSound('single_1');
     }
   }
 
@@ -702,11 +330,12 @@ function checkSpecialEvents() {
     }
   }
 
-  // Kolla för 3 missar i rad
+  // Kolla för 3 missar i rad (sätt sentinel så det inte triggas igen på miss #4, #5 etc.)
   if (throwHistory.length >= 3) {
     const lastThree = throwHistory.slice(-3);
-    if (lastThree.every(t => t.points === 0)) {
+    if (lastThree.every(t => t.points === 0 && !t.threeMissPlayed)) {
       logger.warn('💀 Tre missar i rad!');
+      lastThree.forEach(t => { t.threeMissPlayed = true; });
       if (sound) {
         sound.playSound('three_misses');
       }
@@ -736,12 +365,13 @@ function sendScoliaMessage(type, payload) {
 
 // Generera UUID v4
 function generateUUID() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
+  return crypto.randomUUID();
 }
+
+// Fånga okontrollerade async-fel
+process.on('unhandledRejection', (err) => {
+  logger.error('Ohanterat async-fel:', err?.message || err);
+});
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
@@ -749,6 +379,7 @@ process.on('SIGINT', async () => {
   logger.info('Stänger av...');
 
   if (ws) ws.close();
+  if (sound) sound.close();
   if (knxController) knxController.disconnect();
   if (playwrightController) await playwrightController.close();
   if (reconnectTimeout) clearTimeout(reconnectTimeout);
@@ -759,9 +390,6 @@ process.on('SIGINT', async () => {
 // Starta applikationen
 (async () => {
   await testConnections();
-
-  // Starta REST API
-  startApiServer();
 
   // Starta Playwright DOM-övervakning
   if (playwrightController) {

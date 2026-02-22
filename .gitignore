@@ -8,3 +8,4 @@ scolia-cookies.json
 scolia-dom*.html
 .claude/
 *.pdf
+plejd_control.py

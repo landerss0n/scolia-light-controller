@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node index.js",
     "simulate": "node simulator.js",
-    "test": "node test-connection.js"
+    "test": "node --test test/**/*.test.js",
+    "test:connection": "node test-connection.js",
+    "lint": "eslint *.js lib/ test/"
   },
   "keywords": [
     "scolia",
@@ -16,13 +18,18 @@
   ],
   "author": "",
   "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
-    "cors": "^2.8.6",
-    "express": "^5.2.1",
     "knx": "^2.5.4",
     "node-osc": "^9.0.0",
     "play-sound": "^1.1.6",
     "playwright": "^1.58.2",
     "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.0.1"
   }
 }
