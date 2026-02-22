@@ -80,6 +80,10 @@
       ],
       "_comment": "Flera executors triggas samtidigt (LED Ow Rnd Strobe + LED Speed x4)"
     },
+    "120": {
+      "description": "2x triple 20 i rad",
+      "enabled": true
+    },
     "one_two_three": {
       "description": "Singel 1 → Singel 2 → Singel 3 i följd",
       "enabled": true
@@ -109,6 +113,7 @@
       "triple_17": { "file": "rampage.wav" },
       "single_1": { "file": "cd1.wav" },
       "180": { "file": "monsterkill.wav" },
+      "120": { "file": "120.wav" },
       "one_two_three": { "file": "one_two_three.wav" },
       "three_ones": { "file": "three_ones.wav" },
       "three_misses": { "file": "lostmatch.wav" },

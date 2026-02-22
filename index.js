@@ -349,6 +349,22 @@ function checkSpecialEvents() {
     }
   }
 
+  // Kolla för 2x triple 20 i rad (120p)
+  if (config.special_events?.['120']?.enabled && throwHistory.length >= 2) {
+    const lastTwo = throwHistory.slice(-2);
+    if (
+      lastTwo.every(t => t.segment === 20 && t.multiplier === 3) &&
+      !lastTwo.some(t => t._120played)
+    ) {
+      lastTwo.forEach(t => { t._120played = true; });
+      logger.success('🔥🔥 120! Dubbla T20! 🔥🔥');
+      if (sound) {
+        sound.playSound('120');
+      }
+      return true;
+    }
+  }
+
   // Kolla för singel 1 → 2 → 3 i följd
   if (config.special_events?.one_two_three?.enabled && throwHistory.length >= 3) {
     const lastThree = throwHistory.slice(-3);
