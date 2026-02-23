@@ -487,6 +487,24 @@ function checkSpecialEvents() {
     }
   }
 
+  // Kolla för singel 3, miss, miss i följd (300)
+  if (config.special_events?.three_hundred?.enabled && throwHistory.length >= 3) {
+    const lastThree = throwHistory.slice(-3);
+    if (
+      lastThree[0].segment === 3 && lastThree[0].multiplier === 1 &&
+      lastThree[1].points === 0 &&
+      lastThree[2].points === 0 &&
+      !lastThree.some(t => t._300played)
+    ) {
+      lastThree.forEach(t => { t._300played = true; });
+      logger.success('⚔️ 300! THIS IS SPARTA! ⚔️');
+      if (sound) {
+        sound.playSound('three_hundred');
+      }
+      return true;
+    }
+  }
+
   // Kolla för singel 4, miss, singel 4 i följd (404)
   if (config.special_events?.four_oh_four?.enabled && throwHistory.length >= 3) {
     const lastThree = throwHistory.slice(-3);
