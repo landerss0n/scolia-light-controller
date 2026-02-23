@@ -46,6 +46,7 @@ KNX IP-gateway ──extern länk──→ LightShark (KNX allOff/allOn påverka
 - Emittar events: `bust`, `leg-won`, `set-won`
 - Hanterar automatiskt: cookie-popup, "Finish & View Stats" (30s delay), post-game reload, board selection
 - Fullscreen via CDP (`Browser.setWindowBounds`)
+- Selektiv ljudblockering via Web Audio API hook (`addInitScript`) — blockerar specifika offsets i Scolias audio sprite (bust=580.8s). Övriga ljud från Scolia spelas i browsern.
 - Auto-restart vid browser-krasch
 
 ### lib/lightshark.js
@@ -114,7 +115,7 @@ KNX har en extern fysisk länk till LightShark. Detta innebär:
 - `lastSpecialExecutors[]` - Sparar 180-executors för att kunna toggla av vid takeout
 - `knxLightsOff` - Boolean som spårar om KNX har släckt lamporna (true efter miss)
 - `strobeTimer` - Timer för T20/Bullseye strobe auto-off (rensas vid takeout/reconnect/SIGINT)
-- `throwHistory[]` - Sparar de senaste 100 kasten (för special events). Sentinels på kastobjekt förhindrar dubbletter: `_180played`, `_120played`, `_123played`, `_threeOnesPlayed`, `threeMissPlayed`
+- `throwHistory[]` - Sparar de senaste 100 kasten (för special events). Sentinels på kastobjekt förhindrar dubbletter: `_180played`, `_120played`, `_123played`, `_threeOnesPlayed`, `threeMissPlayed`, `_threeSixesPlayed`, `_007played`, `_420played`, `_1337played`, `_tripleSevenPlayed`, `_69played`
 - Alla state-variabler nollställs vid WebSocket-reconnect (`ws.on('close')`)
 
 ## LightShark Executor Grid (Page 1)
@@ -210,7 +211,13 @@ Baserat på användarens setup:
     },
     "120": { "enabled": true },
     "one_two_three": { "enabled": true },
-    "three_ones": { "enabled": true }
+    "three_ones": { "enabled": true },
+    "three_sixes": { "enabled": true },
+    "double_oh_seven": { "enabled": true },
+    "four_twenty": { "enabled": true },
+    "thirteen_thirty_seven": { "enabled": true },
+    "triple_seven": { "enabled": true },
+    "sixty_nine": { "enabled": true }
   },
   "playwright": {
     "enabled": true,
@@ -290,11 +297,17 @@ Triggas parallellt med ljuseffekter (fire-and-forget) i `handleThrowDetected()`:
 
 ```javascript
 // Special events har högst prio (checkSpecialEvents()):
-1. 180 → 'monsterkill' (3 senaste kast = 180p totalt)
+1. 180 → ljuseffekt only (3 senaste kast = 180p totalt, eget ljud disabled)
 2. 120 → '120' (2x triple 20 i rad)
 3. 1-2-3 → 'one_two_three' (singel 1 → 2 → 3 i följd)
 4. 3x singel 1 → 'three_ones' (sad trombone)
-5. Tre missar i rad → 'lostmatch'
+5. 69 → 'sixty_nine' (6p följt av 9p)
+6. 7-7-7 → 'triple_seven' (3x singel 7 i rad)
+7. 1337 → 'thirteen_thirty_seven' (13p, 3p, 7p i följd)
+8. 420 → 'four_twenty' (4p följt av 20p)
+9. 007 → 'double_oh_seven' (miss, miss, singel 7)
+10. 666 → 'three_sixes' (3x 6p i rad)
+11. Tre missar i rad → 'lostmatch'
 // Om inget special event spelades:
 3. Miss → 'miss' (miss.wav)
 4. Bullseye 50p → 'bullseye' (headshot.wav)
@@ -305,7 +318,7 @@ Triggas parallellt med ljuseffekter (fire-and-forget) i `handleThrowDetected()`:
 ```
 
 Segment-specifika ljud har prioritet via `playSoundWithFallback()`:
-- T20 → godlike, T19 → dominating, T18 → unstoppable, T17 → rampage
+- T20 → godlike, T19 → dominating, T18 → unstoppable, T17 → rampage, T7 → triple_7 (jackpot)
 - Övriga tripplar → triplekill (generellt)
 
 ### Spel-ljud (via Playwright DOM-polling)

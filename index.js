@@ -469,7 +469,7 @@ function checkSpecialEvents() {
   if (config.special_events?.triple_seven?.enabled && throwHistory.length >= 3) {
     const lastThree = throwHistory.slice(-3);
     if (
-      lastThree.every(t => t.segment === 7) &&
+      lastThree.every(t => t.segment === 7 && t.multiplier === 1) &&
       !lastThree.some(t => t._tripleSevenPlayed)
     ) {
       lastThree.forEach(t => { t._tripleSevenPlayed = true; });
