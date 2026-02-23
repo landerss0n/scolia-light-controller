@@ -434,6 +434,163 @@ function checkSpecialEvents() {
     }
   }
 
+  // Kolla för singel 1, singel 1, singel 2 i följd
+  if (config.special_events?.one_one_two?.enabled && throwHistory.length >= 3) {
+    const lastThree = throwHistory.slice(-3);
+    if (
+      lastThree[0].segment === 1 && lastThree[0].multiplier === 1 &&
+      lastThree[1].segment === 1 && lastThree[1].multiplier === 1 &&
+      lastThree[2].segment === 2 && lastThree[2].multiplier === 1 &&
+      !lastThree.some(t => t._112played)
+    ) {
+      lastThree.forEach(t => { t._112played = true; });
+      logger.success('🎵 1-1-2! 🎵');
+      if (sound) {
+        sound.playSound('one_one_two');
+      }
+      return true;
+    }
+  }
+
+  // Kolla för singel 9, singel 1, singel 1 i följd (911)
+  if (config.special_events?.nine_one_one?.enabled && throwHistory.length >= 3) {
+    const lastThree = throwHistory.slice(-3);
+    if (
+      lastThree[0].segment === 9 && lastThree[0].multiplier === 1 &&
+      lastThree[1].segment === 1 && lastThree[1].multiplier === 1 &&
+      lastThree[2].segment === 1 && lastThree[2].multiplier === 1 &&
+      !lastThree.some(t => t._911played)
+    ) {
+      lastThree.forEach(t => { t._911played = true; });
+      logger.success('🚨 911! 🚨');
+      if (sound) {
+        sound.playSound('nine_one_one');
+      }
+      return true;
+    }
+  }
+
+  // Kolla för singel 2 följt av singel 1 (21)
+  if (config.special_events?.twenty_one?.enabled && throwHistory.length >= 2) {
+    const lastTwo = throwHistory.slice(-2);
+    if (
+      lastTwo[0].segment === 2 && lastTwo[0].multiplier === 1 &&
+      lastTwo[1].segment === 1 && lastTwo[1].multiplier === 1 &&
+      !lastTwo.some(t => t._21played)
+    ) {
+      lastTwo.forEach(t => { t._21played = true; });
+      logger.success('🃏 21! 🃏');
+      if (sound) {
+        sound.playSound('twenty_one');
+      }
+      return true;
+    }
+  }
+
+  // Kolla för singel 4, miss, singel 4 i följd (404)
+  if (config.special_events?.four_oh_four?.enabled && throwHistory.length >= 3) {
+    const lastThree = throwHistory.slice(-3);
+    if (
+      lastThree[0].segment === 4 && lastThree[0].multiplier === 1 &&
+      lastThree[1].points === 0 &&
+      lastThree[2].segment === 4 && lastThree[2].multiplier === 1 &&
+      !lastThree.some(t => t._404played)
+    ) {
+      lastThree.forEach(t => { t._404played = true; });
+      logger.success('🔍 404! Not Found! 🔍');
+      if (sound) {
+        sound.playSound('four_oh_four');
+      }
+      return true;
+    }
+  }
+
+  // Kolla för singel 2 följt av singel 3 (23)
+  if (config.special_events?.twenty_three?.enabled && throwHistory.length >= 2) {
+    const lastTwo = throwHistory.slice(-2);
+    if (
+      lastTwo[0].segment === 2 && lastTwo[0].multiplier === 1 &&
+      lastTwo[1].segment === 3 && lastTwo[1].multiplier === 1 &&
+      !lastTwo.some(t => t._23played)
+    ) {
+      lastTwo.forEach(t => { t._23played = true; });
+      logger.success('🎵 23! 🎵');
+      if (sound) {
+        sound.playSound('twenty_three');
+      }
+      return true;
+    }
+  }
+
+  // Kolla för 2x singel 9 i rad (99)
+  if (config.special_events?.ninety_nine?.enabled && throwHistory.length >= 2) {
+    const lastTwo = throwHistory.slice(-2);
+    if (
+      lastTwo.every(t => t.segment === 9 && t.multiplier === 1) &&
+      !lastTwo.some(t => t._99played)
+    ) {
+      lastTwo.forEach(t => { t._99played = true; });
+      logger.success('🎵 99! 🎵');
+      if (sound) {
+        sound.playSound('ninety_nine');
+      }
+      return true;
+    }
+  }
+
+  // Kolla för singel 18, singel 8, singel 8 i följd (1888)
+  if (config.special_events?.eighteen_eighty_eight?.enabled && throwHistory.length >= 3) {
+    const lastThree = throwHistory.slice(-3);
+    if (
+      lastThree[0].segment === 18 && lastThree[0].multiplier === 1 &&
+      lastThree[1].segment === 8 && lastThree[1].multiplier === 1 &&
+      lastThree[2].segment === 8 && lastThree[2].multiplier === 1 &&
+      !lastThree.some(t => t._1888played)
+    ) {
+      lastThree.forEach(t => { t._1888played = true; });
+      logger.success('⚫🟡 1888! ⚫🟡');
+      if (sound) {
+        sound.playSound('eighteen_eighty_eight');
+      }
+      return true;
+    }
+  }
+
+  // Kolla för singel 19, miss, singel 4 i följd (1904)
+  if (config.special_events?.nineteen_oh_four?.enabled && throwHistory.length >= 3) {
+    const lastThree = throwHistory.slice(-3);
+    if (
+      lastThree[0].segment === 19 && lastThree[0].multiplier === 1 &&
+      lastThree[1].points === 0 &&
+      lastThree[2].segment === 4 && lastThree[2].multiplier === 1 &&
+      !lastThree.some(t => t._1904played)
+    ) {
+      lastThree.forEach(t => { t._1904played = true; });
+      logger.success('⚽ 1904! 🟡🔵');
+      if (sound) {
+        sound.playSound('nineteen_oh_four');
+      }
+      return true;
+    }
+  }
+
+  // Kolla för singel 6 följt av singel 7 (67)
+  if (config.special_events?.six_seven?.enabled && throwHistory.length >= 2) {
+    const lastTwo = throwHistory.slice(-2);
+    if (
+      lastTwo[0].segment === 6 && lastTwo[0].multiplier === 1 &&
+      lastTwo[1].segment === 7 && lastTwo[1].multiplier === 1 &&
+      !lastTwo.some(t => t._67played)
+    ) {
+      lastTwo.forEach(t => { t._67played = true; });
+      logger.success('🎵 6-7! 🎵');
+      if (sound) {
+        sound.playSound('six_seven');
+      }
+      return true;
+    }
+  }
+
   // Kolla för 3x 6 poäng i rad
   if (config.special_events?.three_sixes?.enabled && throwHistory.length >= 3) {
     const lastThree = throwHistory.slice(-3);
@@ -604,6 +761,14 @@ process.on('SIGINT', async () => {
     const ok = await playwrightController.launch();
     if (ok) {
       playwrightController.startMonitoring();
+
+      // Muta Scolia-ljud i browsern medan våra ljud spelas
+      if (sound) {
+        sound.setMuteCallbacks(
+          () => playwrightController.muteAudio(),
+          () => playwrightController.unmuteAudio()
+        );
+      }
 
       playwrightController.on('bust', () => {
         logger.info('Playwright → BUST');
