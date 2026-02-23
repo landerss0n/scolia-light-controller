@@ -115,7 +115,7 @@ KNX har en extern fysisk länk till LightShark. Detta innebär:
 - `lastSpecialExecutors[]` - Sparar 180-executors för att kunna toggla av vid takeout
 - `knxLightsOff` - Boolean som spårar om KNX har släckt lamporna (true efter miss)
 - `strobeTimer` - Timer för T20/Bullseye strobe auto-off (rensas vid takeout/reconnect/SIGINT)
-- `throwHistory[]` - Sparar de senaste 100 kasten (för special events). Sentinels på kastobjekt förhindrar dubbletter: `_180played`, `_120played`, `_123played`, `_threeOnesPlayed`, `threeMissPlayed`, `_threeSixesPlayed`, `_007played`, `_420played`, `_1337played`, `_tripleSevenPlayed`, `_69played`
+- `throwHistory[]` - Sparar kasthistorik för special events. Nollställs vid takeout (ny spelares tur) och WebSocket-reconnect. Sentinels på kastobjekt förhindrar dubbletter: `_180played`, `_120played`, `_123played`, `_threeOnesPlayed`, `threeMissPlayed`, `_threeSixesPlayed`, `_007played`, `_420played`, `_1337played`, `_tripleSevenPlayed`, `_69played`
 - Alla state-variabler nollställs vid WebSocket-reconnect (`ws.on('close')`)
 
 ## LightShark Executor Grid (Page 1)
