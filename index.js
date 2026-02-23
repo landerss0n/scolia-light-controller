@@ -173,6 +173,8 @@ function handleScoliaMessage(message) {
 
     case 'TAKEOUT_FINISHED':
       logger.info('✓ Pilar uttagna, redo för nästa kast');
+      // Nollställ kasthistorik (ny spelares tur)
+      throwHistory = [];
       // Spela takeout-ljud
       if (sound) {
         sound.playSound('takeout');
