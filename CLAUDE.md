@@ -46,7 +46,10 @@ KNX IP-gateway ──extern länk──→ LightShark (KNX allOff/allOn påverka
 - Emittar events: `bust`, `leg-won`, `set-won`
 - Hanterar automatiskt: cookie-popup, "Finish & View Stats" (30s delay), post-game reload, board selection
 - Fullscreen via CDP (`Browser.setWindowBounds`)
-- Selektiv ljudblockering via Web Audio API hook (`addInitScript`) — blockerar specifika offsets i Scolias audio sprite (bust=580.8s). Övriga ljud från Scolia spelas i browsern.
+- Ljudblockering via Web Audio API hook (`addInitScript`):
+  - **Permanent blockering:** specifika offsets i Scolias audio sprite (bust=580.8s)
+  - **Temporär mute:** `window.__scoliaMuted` flagga blockerar ALLT Scolia-ljud medan våra egna ljud spelas
+- `muteAudio()` / `unmuteAudio()` — sätter `__scoliaMuted` via `page.evaluate()`, anropas av SoundController
 - Auto-restart vid browser-krasch
 
 ### lib/lightshark.js
@@ -61,10 +64,15 @@ KNX IP-gateway ──extern länk──→ LightShark (KNX allOff/allOn påverka
 
 ### lib/sound.js
 - Ljuduppspelning via `afplay` (macOS med volymstöd), `play-sound` (Linux) och PowerShell (Windows)
-- `playSound(eventName)` - Spelar ljud fire-and-forget
+- `playSound(eventName)` - Spelar ljud fire-and-forget, mutar Scolia-ljud i browsern under uppspelning
 - `playSoundWithFallback(specific, fallback)` - Försöker segment-specifikt ljud först (t.ex. `triple_20`), faller tillbaka till generellt (t.ex. `triple`)
+- `setMuteCallbacks(onMute, onUnmute)` - Kopplas till PlaywrightController.muteAudio/unmuteAudio i index.js
 - Stöd per ljud: `volume` (0.0–2.0, default 1.0), `enabled` (true/false)
 - Kräver WAV-filer i `sounds/`-mappen
+- **Browser-mute under uppspelning:** Mutar allt Scolia-ljud medan vårt ljud spelas. Unmute sker via:
+  - **Windows:** Timer baserad på WAV-filens duration (läser header: byteRate + dataSize, +300ms buffer)
+  - **macOS:** `afplay` process exit
+  - **Linux:** `play-sound` callback
 
 ### lib/knx.js
 - KNX IP-gateway kommunikation via `knx` npm-paket
@@ -115,7 +123,7 @@ KNX har en extern fysisk länk till LightShark. Detta innebär:
 - `lastSpecialExecutors[]` - Sparar 180-executors för att kunna toggla av vid takeout
 - `knxLightsOff` - Boolean som spårar om KNX har släckt lamporna (true efter miss)
 - `strobeTimer` - Timer för T20/Bullseye strobe auto-off (rensas vid takeout/reconnect/SIGINT)
-- `throwHistory[]` - Sparar kasthistorik för special events. Nollställs vid takeout (ny spelares tur) och WebSocket-reconnect. Sentinels på kastobjekt förhindrar dubbletter: `_180played`, `_120played`, `_123played`, `_threeOnesPlayed`, `threeMissPlayed`, `_threeSixesPlayed`, `_007played`, `_420played`, `_1337played`, `_tripleSevenPlayed`, `_69played`
+- `throwHistory[]` - Sparar kasthistorik för special events. Nollställs vid takeout (ny spelares tur) och WebSocket-reconnect. Sentinels på kastobjekt förhindrar dubbletter: `_180played`, `_120played`, `_123played`, `_threeOnesPlayed`, `threeMissPlayed`, `_threeSixesPlayed`, `_007played`, `_420played`, `_1337played`, `_tripleSevenPlayed`, `_69played`, `_112played`, `_911played`, `_67played`, `_1904played`, `_1888played`, `_99played`, `_21played`, `_23played`, `_404played`
 - Alla state-variabler nollställs vid WebSocket-reconnect (`ws.on('close')`)
 
 ## LightShark Executor Grid (Page 1)
@@ -217,7 +225,16 @@ Baserat på användarens setup:
     "four_twenty": { "enabled": true },
     "thirteen_thirty_seven": { "enabled": true },
     "triple_seven": { "enabled": true },
-    "sixty_nine": { "enabled": true }
+    "sixty_nine": { "enabled": true },
+    "one_one_two": { "enabled": true },
+    "nine_one_one": { "enabled": true },
+    "six_seven": { "enabled": true },
+    "nineteen_oh_four": { "enabled": true },
+    "eighteen_eighty_eight": { "enabled": true },
+    "ninety_nine": { "enabled": true },
+    "twenty_one": { "enabled": true },
+    "twenty_three": { "enabled": true },
+    "four_oh_four": { "enabled": true }
   },
   "playwright": {
     "enabled": true,
@@ -252,7 +269,16 @@ Baserat på användarens setup:
       "takeout": { "file": "draw.wav", "volume": 0.25 },
       "bust": { "file": "tjockis.wav", "volume": 2.0 },
       "leg_won": { "file": "holy-shit.wav" },
-      "set_won": { "file": "set_won.wav" }
+      "set_won": { "file": "set_won.wav" },
+      "one_one_two": { "file": "one_one_two.wav" },
+      "nine_one_one": { "file": "nine_one_one.wav" },
+      "six_seven": { "file": "six_seven.wav" },
+      "nineteen_oh_four": { "file": "nineteen_oh_four.wav" },
+      "eighteen_eighty_eight": { "file": "eighteen_eighty_eight.wav" },
+      "ninety_nine": { "file": "ninety_nine.wav" },
+      "twenty_one": { "file": "twenty_one.wav" },
+      "twenty_three": { "file": "twenty_three.wav" },
+      "four_oh_four": { "file": "four_oh_four.wav" }
     }
   },
   "knx": {
@@ -307,7 +333,16 @@ Triggas parallellt med ljuseffekter (fire-and-forget) i `handleThrowDetected()`:
 8. 420 → 'four_twenty' (4p följt av 20p)
 9. 007 → 'double_oh_seven' (miss, miss, singel 7)
 10. 666 → 'three_sixes' (3x 6p i rad)
-11. Tre missar i rad → 'lostmatch'
+11. 404 → 'four_oh_four' (singel 4, miss, singel 4)
+12. 1904 → 'nineteen_oh_four' (singel 19, miss, singel 4)
+13. 1888 → 'eighteen_eighty_eight' (singel 18, singel 8, singel 8)
+14. 112 → 'one_one_two' (singel 1, singel 1, singel 2)
+15. 911 → 'nine_one_one' (singel 9, singel 1, singel 1)
+16. 21 → 'twenty_one' (singel 2, singel 1)
+17. 23 → 'twenty_three' (singel 2, singel 3)
+18. 67 → 'six_seven' (singel 6, singel 7)
+19. 99 → 'ninety_nine' (2x singel 9 i rad)
+20. Tre missar i rad → 'lostmatch'
 // Om inget special event spelades:
 3. Miss → 'miss' (miss.wav)
 4. Bullseye 50p → 'bullseye' (headshot.wav)
