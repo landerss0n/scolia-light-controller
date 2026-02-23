@@ -448,6 +448,39 @@ function checkSpecialEvents() {
     }
   }
 
+  // Kolla för 69 (6 poäng följt av 9 poäng)
+  if (config.special_events?.sixty_nine?.enabled && throwHistory.length >= 2) {
+    const lastTwo = throwHistory.slice(-2);
+    if (
+      lastTwo[0].points === 6 &&
+      lastTwo[1].points === 9 &&
+      !lastTwo.some(t => t._69played)
+    ) {
+      lastTwo.forEach(t => { t._69played = true; });
+      logger.success('😏 69! Nice! 😏');
+      if (sound) {
+        sound.playSound('sixty_nine');
+      }
+      return true;
+    }
+  }
+
+  // Kolla för 7-7-7 (tre kast på segment 7)
+  if (config.special_events?.triple_seven?.enabled && throwHistory.length >= 3) {
+    const lastThree = throwHistory.slice(-3);
+    if (
+      lastThree.every(t => t.segment === 7) &&
+      !lastThree.some(t => t._tripleSevenPlayed)
+    ) {
+      lastThree.forEach(t => { t._tripleSevenPlayed = true; });
+      logger.success('🎰 7-7-7! JACKPOT! 🎰');
+      if (sound) {
+        sound.playSound('triple_seven');
+      }
+      return true;
+    }
+  }
+
   // Kolla för 1337 (13 poäng, 3 poäng, 7 poäng)
   if (config.special_events?.thirteen_thirty_seven?.enabled && throwHistory.length >= 3) {
     const lastThree = throwHistory.slice(-3);
