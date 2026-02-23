@@ -432,6 +432,75 @@ function checkSpecialEvents() {
     }
   }
 
+  // Kolla för 3x 6 poäng i rad
+  if (config.special_events?.three_sixes?.enabled && throwHistory.length >= 3) {
+    const lastThree = throwHistory.slice(-3);
+    if (
+      lastThree.every(t => t.points === 6) &&
+      !lastThree.some(t => t._threeSixesPlayed)
+    ) {
+      lastThree.forEach(t => { t._threeSixesPlayed = true; });
+      logger.success('😈 Tre sexor i rad! Number of the beast! 😈');
+      if (sound) {
+        sound.playSound('three_sixes');
+      }
+      return true;
+    }
+  }
+
+  // Kolla för 1337 (13 poäng, 3 poäng, 7 poäng)
+  if (config.special_events?.thirteen_thirty_seven?.enabled && throwHistory.length >= 3) {
+    const lastThree = throwHistory.slice(-3);
+    if (
+      lastThree[0].points === 13 &&
+      lastThree[1].points === 3 &&
+      lastThree[2].points === 7 &&
+      !lastThree.some(t => t._1337played)
+    ) {
+      lastThree.forEach(t => { t._1337played = true; });
+      logger.success('💻 1337! H4X0R! 💻');
+      if (sound) {
+        sound.playSound('thirteen_thirty_seven');
+      }
+      return true;
+    }
+  }
+
+  // Kolla för 420 (4 poäng följt av 20 poäng)
+  if (config.special_events?.four_twenty?.enabled && throwHistory.length >= 2) {
+    const lastTwo = throwHistory.slice(-2);
+    if (
+      lastTwo[0].points === 4 &&
+      lastTwo[1].points === 20 &&
+      !lastTwo.some(t => t._420played)
+    ) {
+      lastTwo.forEach(t => { t._420played = true; });
+      logger.success('🌿 420! 🌿');
+      if (sound) {
+        sound.playSound('four_twenty');
+      }
+      return true;
+    }
+  }
+
+  // Kolla för 007 (miss, miss, 7)
+  if (config.special_events?.double_oh_seven?.enabled && throwHistory.length >= 3) {
+    const lastThree = throwHistory.slice(-3);
+    if (
+      lastThree[0].points === 0 &&
+      lastThree[1].points === 0 &&
+      lastThree[2].segment === 7 && lastThree[2].multiplier === 1 &&
+      !lastThree.some(t => t._007played)
+    ) {
+      lastThree.forEach(t => { t._007played = true; });
+      logger.success('🔫 007! Miss, miss, seven! 🔫');
+      if (sound) {
+        sound.playSound('double_oh_seven');
+      }
+      return true;
+    }
+  }
+
   // Kolla för 3 missar i rad (sätt sentinel så det inte triggas igen på miss #4, #5 etc.)
   if (throwHistory.length >= 3) {
     const lastThree = throwHistory.slice(-3);
