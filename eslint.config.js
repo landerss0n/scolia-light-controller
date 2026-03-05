@@ -33,6 +33,8 @@ module.exports = [
     languageOptions: {
       globals: {
         document: 'readonly',
+        AudioBufferSourceNode: 'readonly',
+        BaseAudioContext: 'readonly',
       },
     },
     rules: {

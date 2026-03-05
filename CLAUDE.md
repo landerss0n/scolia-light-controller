@@ -307,10 +307,11 @@ Redigera `colorMode` i `config.json`:
 - `redExecutor` / `greenExecutor` - Vilka executors som triggas
 
 ### Lägga till nytt ljud
-1. Lägg WAV-fil i `sounds/`
-2. Lägg till mappning i `config.json` → `sound.sounds`
-3. Segment-specifika: namnge `{type}_{segment}` (t.ex. `double_20`)
-4. Trigga via `sound.playSound('eventName')` eller `sound.playSoundWithFallback('specific', 'fallback')`
+1. Ladda ner från YouTube: `yt-dlp -x --audio-format wav -o "sounds/namn.%(ext)s" "https://youtu.be/VIDEO_ID"`
+2. Konvertera till PCM WAV (krävs för Windows): `ffmpeg -i sounds/namn.wav -acodec pcm_s16le -ar 44100 -ac 2 sounds/namn_pcm.wav -y && mv sounds/namn_pcm.wav sounds/namn.wav`
+3. Lägg till mappning i `config.json` → `sound.sounds`
+4. Segment-specifika: namnge `{type}_{segment}` (t.ex. `double_20`)
+5. Trigga via `sound.playSound('eventName')` eller `sound.playSoundWithFallback('specific', 'fallback')`
 
 ### Lägga till nytt event
 1. Lägg till case i `handleScoliaMessage()` switch-sats

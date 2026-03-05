@@ -711,6 +711,22 @@ function checkSpecialEvents() {
     }
   }
 
+  // Kolla för 2 missar i rad (sista chansen!)
+  if (config.special_events?.last_chance?.enabled && throwHistory.length >= 2) {
+    const lastTwo = throwHistory.slice(-2);
+    if (
+      lastTwo.every(t => t.points === 0) &&
+      !lastTwo.some(t => t._lastChancePlayed)
+    ) {
+      lastTwo.forEach(t => { t._lastChancePlayed = true; });
+      logger.success('⚠️ Två missar i rad! Sista chansen! ⚠️');
+      if (sound) {
+        sound.playSound('last_chance');
+      }
+      return true;
+    }
+  }
+
   // Kolla för 3 missar i rad (sätt sentinel så det inte triggas igen på miss #4, #5 etc.)
   if (throwHistory.length >= 3) {
     const lastThree = throwHistory.slice(-3);
@@ -719,6 +735,34 @@ function checkSpecialEvents() {
       lastThree.forEach(t => { t.threeMissPlayed = true; });
       if (sound) {
         sound.playSound('three_misses');
+      }
+      return true;
+    }
+  }
+
+  // Total-score check: efter exakt 3 kast, kolla om totalsumman matchar ett special event
+  // Lägre prioritet än alla sekvens-events ovan
+  if (throwHistory.length >= 3) {
+    const lastThree = throwHistory.slice(-3);
+    const totalPoints = lastThree.reduce((sum, t) => sum + t.points, 0);
+
+    const totalScoreEvents = {
+      21:  { config: 'twenty_one',      sound: 'twenty_one',      emoji: '🃏', label: '21' },
+      23:  { config: 'twenty_three',     sound: 'twenty_three',    emoji: '🎵', label: '23' },
+      67:  { config: 'six_seven',        sound: 'six_seven',       emoji: '🎵', label: '67' },
+      69:  { config: 'sixty_nine',       sound: 'sixty_nine',      emoji: '😏', label: '69' },
+      99:  { config: 'ninety_nine',      sound: 'ninety_nine',     emoji: '🎵', label: '99' },
+      111: { config: 'three_ones',       sound: 'three_ones',      emoji: '🎺', label: '111' },
+      112: { config: 'one_one_two',      sound: 'one_one_two',     emoji: '🎵', label: '112' },
+      123: { config: 'one_two_three',    sound: 'one_two_three',   emoji: '🍹', label: '123' },
+    };
+
+    const event = totalScoreEvents[totalPoints];
+    if (event && config.special_events?.[event.config]?.enabled && !lastThree.some(t => t[`_total${totalPoints}played`])) {
+      lastThree.forEach(t => { t[`_total${totalPoints}played`] = true; });
+      logger.success(`${event.emoji} Total ${event.label}! (${lastThree.map(t => t.points).join(' + ')} = ${totalPoints}) ${event.emoji}`);
+      if (sound) {
+        sound.playSound(event.sound);
       }
       return true;
     }
@@ -779,14 +823,6 @@ process.on('SIGINT', async () => {
     const ok = await playwrightController.launch();
     if (ok) {
       playwrightController.startMonitoring();
-
-      // Muta Scolia-ljud i browsern medan våra ljud spelas
-      if (sound) {
-        sound.setMuteCallbacks(
-          () => playwrightController.muteAudio(),
-          () => playwrightController.unmuteAudio()
-        );
-      }
 
       playwrightController.on('bust', () => {
         logger.info('Playwright → BUST');
