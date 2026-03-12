@@ -711,8 +711,8 @@ function checkSpecialEvents() {
     }
   }
 
-  // Kolla för 2 missar i rad (sista chansen!)
-  if (config.special_events?.last_chance?.enabled && throwHistory.length >= 2) {
+  // Kolla för 2 missar i rad (sista chansen!) - endast på pil 1 och 2 efter takeout
+  if (config.special_events?.last_chance?.enabled && throwHistory.length === 2) {
     const lastTwo = throwHistory.slice(-2);
     if (
       lastTwo.every(t => t.points === 0) &&
@@ -763,6 +763,16 @@ function checkSpecialEvents() {
       logger.success(`${event.emoji} Total ${event.label}! (${lastThree.map(t => t.points).join(' + ')} = ${totalPoints}) ${event.emoji}`);
       if (sound) {
         sound.playSound(event.sound);
+      }
+      return true;
+    }
+
+    // Low score: under 10 poäng på 3 kast
+    if (config.special_events?.low_score?.enabled && totalPoints < 10 && !lastThree.some(t => t._lowScorePlayed)) {
+      lastThree.forEach(t => { t._lowScorePlayed = true; });
+      logger.warn(`😬 Låg poäng! (${lastThree.map(t => t.points).join(' + ')} = ${totalPoints})`);
+      if (sound) {
+        sound.playSound('low_score');
       }
       return true;
     }
