@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "simulate": "node simulator.js",
-    "test": "node --test test/**/*.test.js",
+    "test": "node --test test/*.test.js",
     "test:connection": "node test-connection.js",
     "lint": "eslint *.js lib/ test/"
   },
