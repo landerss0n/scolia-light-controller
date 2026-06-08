@@ -68,6 +68,7 @@ KNX IP-gateway ──extern länk──→ LightShark (KNX allOff/allOn påverka
 - `playSoundWithFallback(specific, fallback)` - Försöker segment-specifikt ljud först (t.ex. `triple_20`), faller tillbaka till generellt (t.ex. `triple`)
 - `setMuteCallbacks(onMute, onUnmute)` - Kopplas till PlaywrightController.muteAudio/unmuteAudio i index.js
 - Stöd per ljud: `volume` (0.0–2.0, default 1.0), `enabled` (true/false)
+- **Random-ljud:** ett event kan ha `files: [...]` istället för `file` — en fil väljs slumpmässigt vid varje uppspelning (t.ex. `bust` växlar mellan `tjockis.wav` och `bust_alt.wav`). Entries kan vara strängar eller `{ file, volume }`. Logiken finns i `resolveSoundFile()` (ren, testad). OBS: Windows SoundPlayer ignorerar volym — matcha loudness i WAV-filen istället
 - Kräver WAV-filer i `sounds/`-mappen
 - **Browser-mute under uppspelning:** Mutar allt Scolia-ljud medan vårt ljud spelas. Unmute sker via:
   - **Windows:** Timer baserad på WAV-filens duration (läser header: byteRate + dataSize, +300ms buffer)
@@ -123,7 +124,7 @@ KNX har en extern fysisk länk till LightShark. Detta innebär:
 - `lastSpecialExecutors[]` - Sparar 180-executors för att kunna toggla av vid takeout
 - `knxLightsOff` - Boolean som spårar om KNX har släckt lamporna (true efter miss)
 - `strobeTimer` - Timer för T20/Bullseye strobe auto-off (rensas vid takeout/reconnect/SIGINT)
-- `throwHistory[]` - Sparar kasthistorik för special events. Nollställs vid takeout (ny spelares tur) och WebSocket-reconnect. Sentinels på kastobjekt förhindrar dubbletter: `_180played`, `_120played`, `_123played`, `_threeOnesPlayed`, `threeMissPlayed`, `_threeSixesPlayed`, `_007played`, `_420played`, `_1337played`, `_tripleSevenPlayed`, `_69played`, `_112played`, `_911played`, `_67played`, `_1904played`, `_1888played`, `_99played`, `_21played`, `_23played`, `_404played`
+- `throwHistory[]` - Sparar kasthistorik för special events. Nollställs vid takeout (ny spelares tur) och WebSocket-reconnect. Sentinels på kastobjekt förhindrar dubbletter: `_180played`, `_120played`, `_123played`, `_321played`, `_threeOnesPlayed`, `threeMissPlayed`, `_threeSixesPlayed`, `_threeTwentiesPlayed`, `_007played`, `_420played`, `_1337played`, `_tripleSevenPlayed`, `_69played`, `_112played`, `_911played`, `_67played`, `_1904played`, `_1888played`, `_99played`, `_21played`, `_23played`, `_404played`
 - Alla state-variabler nollställs vid WebSocket-reconnect (`ws.on('close')`)
 
 ## LightShark Executor Grid (Page 1)
@@ -327,6 +328,7 @@ Triggas parallellt med ljuseffekter (fire-and-forget) i `handleThrowDetected()`:
 1. 180 → ljuseffekt only (3 senaste kast = 180p totalt, eget ljud disabled)
 2. 120 → '120' (2x triple 20 i rad)
 3. 1-2-3 → 'one_two_three' (singel 1 → 2 → 3 i följd)
+3b. 3-2-1 → 'three_two_one' (singel 3 → 2 → 1 i följd, Apollo 11 liftoff)
 4. 3x singel 1 → 'three_ones' (sad trombone)
 5. 69 → 'sixty_nine' (6p följt av 9p)
 6. 7-7-7 → 'triple_seven' (3x singel 7 i rad)
@@ -334,6 +336,7 @@ Triggas parallellt med ljuseffekter (fire-and-forget) i `handleThrowDetected()`:
 8. 420 → 'four_twenty' (4p följt av 20p)
 9. 007 → 'double_oh_seven' (miss, miss, singel 7)
 10. 666 → 'three_sixes' (3x 6p i rad)
+10b. 3x singel 20 → 'three_twenties' (riktigt bra, ironiskt)
 11. 404 → 'four_oh_four' (singel 4, miss, singel 4)
 12. 1904 → 'nineteen_oh_four' (singel 19, miss, singel 4)
 13. 1888 → 'eighteen_eighty_eight' (singel 18, singel 8, singel 8)

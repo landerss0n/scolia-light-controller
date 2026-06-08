@@ -5,11 +5,13 @@ const { detectSpecialEvent } = require('../lib/specialEvents');
 // Config med alla events aktiverade
 function fullConfig() {
   const names = [
-    '180', '120', 'one_two_three', 'three_ones', 'one_one_two', 'nine_one_one',
+    '180', '120', 'one_two_three', 'three_two_one', 'three_ones', 'one_one_two', 'nine_one_one',
     'twenty_one', 'three_hundred', 'four_oh_four', 'twenty_three', 'ninety_nine',
     'eighteen_eighty_eight', 'nineteen_oh_four', 'six_seven', 'three_sixes',
-    'sixty_nine', 'triple_seven', 'thirteen_thirty_seven', 'four_twenty',
+    'three_twenties', 'sixty_nine', 'triple_seven', 'thirteen_thirty_seven', 'four_twenty',
     'double_oh_seven', 'last_chance', 'low_score',
+    'fifty_one', 'five_hundred', 'two_oh_one', 'nineteen_ninety_eight',
+    'nineteen_ninety_four', 'ten_five_six', 'thirty_three', 'fifteen', 'triple_one',
   ];
   const special_events = {};
   for (const n of names) special_events[n] = { enabled: true };
@@ -98,6 +100,11 @@ describe('detectSpecialEvent', () => {
       assert.equal(detectSpecialEvent(h, fullConfig()).sound, 'one_two_three');
     });
 
+    it('3-2-1 (s3 s2 s1) → three_two_one', () => {
+      const h = [thr(3, 1), thr(2, 1), thr(1, 1)];
+      assert.equal(detectSpecialEvent(h, fullConfig()).sound, 'three_two_one');
+    });
+
     it('three_ones (s1 s1 s1)', () => {
       const h = [thr(1, 1), thr(1, 1), thr(1, 1)];
       assert.equal(detectSpecialEvent(h, fullConfig()).sound, 'three_ones');
@@ -141,6 +148,16 @@ describe('detectSpecialEvent', () => {
     it('7-7-7 (tre singel 7)', () => {
       const h = [thr(7, 1), thr(7, 1), thr(7, 1)];
       assert.equal(detectSpecialEvent(h, fullConfig()).sound, 'triple_seven');
+    });
+
+    it('three_twenties (tre singel 20)', () => {
+      const h = [thr(20, 1), thr(20, 1), thr(20, 1)];
+      assert.equal(detectSpecialEvent(h, fullConfig()).sound, 'three_twenties');
+    });
+
+    it('three_twenties triggar INTE på tre T20 (måste vara singlar)', () => {
+      const h = [thr(20, 3), thr(20, 3), thr(20, 3)];
+      assert.notEqual(detectSpecialEvent(h, fullConfig())?.sound, 'three_twenties');
     });
   });
 
@@ -187,6 +204,57 @@ describe('detectSpecialEvent', () => {
     it('last_chance: två missar (exakt 2 kast i historiken)', () => {
       const h = [miss(), miss()];
       assert.equal(detectSpecialEvent(h, fullConfig()).sound, 'last_chance');
+    });
+  });
+
+  describe('nya nummer-events', () => {
+    it('51 (s5 s1)', () => {
+      assert.equal(detectSpecialEvent([thr(5, 1), thr(1, 1)], fullConfig()).sound, 'fifty_one');
+    });
+
+    it('15 (s1 s5)', () => {
+      assert.equal(detectSpecialEvent([thr(1, 1), thr(5, 1)], fullConfig()).sound, 'fifteen');
+    });
+
+    it('33 via sekvens (s3 s3)', () => {
+      assert.equal(detectSpecialEvent([thr(3, 1), thr(3, 1)], fullConfig()).sound, 'thirty_three');
+    });
+
+    it('33 via total 33p (t11 + miss + ... summa 33)', () => {
+      // t11=33 ensamt räcker inte (1 kast). Bygg 33 på tre kast utan s3-sekvens.
+      const h = [thr(20, 1), thr(10, 1), thr(3, 1)]; // 20+10+3 = 33
+      assert.equal(detectSpecialEvent(h, fullConfig()).sound, 'thirty_three');
+    });
+
+    it('500 (s5 miss miss) vinner över low_score', () => {
+      const h = [thr(5, 1), miss(), miss()];
+      assert.equal(detectSpecialEvent(h, fullConfig()).sound, 'five_hundred');
+    });
+
+    it('201 (s20 miss s1) vinner över total-21', () => {
+      const h = [thr(20, 1), miss(), thr(1, 1)]; // summa 21
+      assert.equal(detectSpecialEvent(h, fullConfig()).sound, 'two_oh_one');
+    });
+
+    it('1998 (s19 s9 s8)', () => {
+      assert.equal(detectSpecialEvent([thr(19, 1), thr(9, 1), thr(8, 1)], fullConfig()).sound, 'nineteen_ninety_eight');
+    });
+
+    it('1994 (s19 s9 s4)', () => {
+      assert.equal(detectSpecialEvent([thr(19, 1), thr(9, 1), thr(4, 1)], fullConfig()).sound, 'nineteen_ninety_four');
+    });
+
+    it('105.6 (s10 s5 s6) vinner över total-21', () => {
+      const h = [thr(10, 1), thr(5, 1), thr(6, 1)]; // summa 21
+      assert.equal(detectSpecialEvent(h, fullConfig()).sound, 'ten_five_six');
+    });
+
+    it('triple_one (t1)', () => {
+      assert.equal(detectSpecialEvent([thr(1, 3)], fullConfig()).sound, 'triple_one');
+    });
+
+    it('triple_one triggar inte på singel 1', () => {
+      assert.notEqual(detectSpecialEvent([thr(1, 1)], fullConfig())?.sound, 'triple_one');
     });
   });
 
