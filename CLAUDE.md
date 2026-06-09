@@ -96,6 +96,15 @@ KNX IP-gateway ──extern länk──→ LightShark (KNX allOff/allOn påverka
 - **Incident-keys:** `scolia-down` (index.js, vid `reconnectAlertAfter`), `lightshark-down` (lightshark.js, vid `failureAlertAfter`), `playwright-down` (playwright.js, vid `restartAlertAfter`), `app-crash` (index.js `uncaughtException`, best-effort innan exit)
 - Config: `notifications.enabled`, `notifications.slackWebhookUrl`, `notifications.label`
 
+### lib/slackCommands.js
+- `SlackCommandListener` — tar emot kommandon från Slack via **Socket Mode** (utgående WebSocket, funkar bakom NAT/Tailscale utan publik endpoint). Dependency: `@slack/socket-mode`
+- Just nu bara **`!restart`**: `matchesCommand()` (ren, testad) kräver exakt match (trimmat, case-insensitive) → triggar inte av vanligt prat. `shouldHandleRestart()` lägger på debounce (default 30s, injicerbar klocka för test)
+- Ignorerar bottens egna/system-meddelanden (`bot_id`/`subtype`) → ingen loop
+- Vid träff: kvitterar via webhooken (`notifier.send`), kör sedan `onRestart` → `process.exit(0)` → **pm2 startar om appen**
+- Skapas alltid i index.js; `socketMode.enabled:false` eller tom `appToken` → no-op
+- Config: `notifications.socketMode.{enabled,appToken,command,debounceMs}`
+- **Slack-setup:** samma app som webhooken — aktivera Socket Mode, skapa app-level token (`connections:write`), aktivera event `message.channels`, bjud in boten till kanalen
+
 ### Robusthet / felsynlighet
 - **WS-reconnect:** `reconnectAttempts` med backoff. Config: `scolia.reconnectDelay` (bas), `scolia.reconnectMaxDelay` (tak, default 60000), `scolia.reconnectAlertAfter` (default 5). Nollställs i `ws.on('open')`
 - **Playwright-restart:** `restartAttempts` med backoff. Config (under `playwright`): `restartBaseDelayMs` (default 10000), `restartMaxDelayMs` (default 300000), `restartAlertAfter` (default 3). Nollställs vid lyckad `launch()`

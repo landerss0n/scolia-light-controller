@@ -170,7 +170,16 @@
     "_comment_slackWebhookUrl": "Slack Incoming Webhook-URL (https://hooks.slack.com/services/...)",
 
     "label": "Scolia (madrixpc)",
-    "_comment_label": "Prefix i larmen så du ser vilken maskin/app det gäller"
+    "_comment_label": "Prefix i larmen så du ser vilken maskin/app det gäller",
+
+    "socketMode": {
+      "enabled": false,
+      "_comment_enabled": "true = lyssna på Slack-kommandon (t.ex. !restart) via Socket Mode",
+      "appToken": "",
+      "_comment_appToken": "App-level token (xapp-...) med connections:write. Kräver Socket Mode + event message.channels aktiverat i Slack-appen, och att boten är med i kanalen",
+      "command": "!restart",
+      "debounceMs": 30000
+    }
   },
 
   "logging": {

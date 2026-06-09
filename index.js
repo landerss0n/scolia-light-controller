@@ -14,6 +14,7 @@ const { resolveThrowEffect, applyExecutor } = require('./lib/effects');
 const { detectSpecialEvent } = require('./lib/specialEvents');
 const { nextBackoffDelay } = require('./lib/backoff');
 const { SlackNotifier } = require('./lib/notifier');
+const { SlackCommandListener } = require('./lib/slackCommands');
 
 // Ladda konfiguration
 const config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
@@ -23,6 +24,19 @@ const logger = new Logger(config.logging);
 // Notifier skapas alltid — disabled/utan webhook blir den en no-op, så alla
 // anropsställen kan kalla alert/recover utan att kolla om den finns.
 const notifier = new SlackNotifier(config.notifications || {}, logger);
+// Slack-kommandolyssnare (Socket Mode). Just nu bara !restart → process.exit(0),
+// pm2 startar om appen. Skapas alltid; disabled/utan appToken blir en no-op.
+const slackCommands = new SlackCommandListener(
+  config.notifications?.socketMode || {},
+  logger,
+  {
+    reply: (msg) => notifier.send(msg),
+    onRestart: () => {
+      logger.warn('♻️  Omstart begärd via Slack — avslutar (pm2 startar om)');
+      process.exit(0);
+    },
+  },
+);
 const lightshark = config.lightshark.enabled ? new LightSharkController(config.lightshark, logger, notifier) : null;
 const sound = config.sound?.enabled ? new SoundController(config.sound, logger) : null;
 const knxController = config.knx?.enabled ? new KnxController(config.knx, logger) : null;
@@ -446,6 +460,7 @@ process.on('SIGINT', async () => {
   logger.info('Stänger av...');
 
   if (ws) ws.close();
+  if (slackCommands) await slackCommands.stop();
   if (sound) sound.close();
   if (knxController) knxController.disconnect();
   if (playwrightController) await playwrightController.close();
@@ -459,6 +474,9 @@ process.on('SIGINT', async () => {
 // Starta applikationen
 (async () => {
   await testConnections();
+
+  // Starta Slack-kommandolyssnare (no-op om disabled)
+  await slackCommands.start();
 
   // Starta Playwright DOM-övervakning
   if (playwrightController) {
