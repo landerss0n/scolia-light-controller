@@ -9,3 +9,4 @@ scolia-dom*.html
 .claude/
 *.pdf
 plejd_control.py
+.restart-flag

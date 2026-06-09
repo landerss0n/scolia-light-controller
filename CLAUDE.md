@@ -101,6 +101,7 @@ KNX IP-gateway ──extern länk──→ LightShark (KNX allOff/allOn påverka
 - Just nu bara **`!restart`**: `matchesCommand()` (ren, testad) kräver exakt match (trimmat, case-insensitive) → triggar inte av vanligt prat. `shouldHandleRestart()` lägger på debounce (default 30s, injicerbar klocka för test)
 - Ignorerar bottens egna/system-meddelanden (`bot_id`/`subtype`) → ingen loop
 - Vid träff: kvitterar via webhooken (`notifier.send`), kör sedan `onRestart` → `process.exit(0)` → **pm2 startar om appen**
+- **"Uppe igen"-bekräftelse:** `onRestart` skriver en markörfil (`lib/restartFlag.js`, `.restart-flag` i projektroten, gitignorerad) innan exit. Vid uppstart läser+raderar index.js den och postar "✅ Uppe igen efter omstart" — bara efter en `!restart`, inte vid pm2-/cron-/watchdog-omstart
 - Skapas alltid i index.js; `socketMode.enabled:false` eller tom `appToken` → no-op
 - Config: `notifications.socketMode.{enabled,appToken,command,debounceMs}`
 - **Slack-setup:** samma app som webhooken — aktivera Socket Mode, skapa app-level token (`connections:write`), aktivera event `message.channels`, bjud in boten till kanalen

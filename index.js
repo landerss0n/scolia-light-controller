@@ -15,6 +15,11 @@ const { detectSpecialEvent } = require('./lib/specialEvents');
 const { nextBackoffDelay } = require('./lib/backoff');
 const { SlackNotifier } = require('./lib/notifier');
 const { SlackCommandListener } = require('./lib/slackCommands');
+const { markRestart, consumeRestartFlag } = require('./lib/restartFlag');
+
+// Markörfil för Slack-begärd omstart — sätts innan exit, läses vid uppstart
+// för att bekräfta "uppe igen" (utan att spamma vid pm2-/cron-/watchdog-omstart).
+const RESTART_FLAG = path.join(__dirname, '.restart-flag');
 
 // Ladda konfiguration
 const config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
@@ -33,6 +38,7 @@ const slackCommands = new SlackCommandListener(
     reply: (msg) => notifier.send(msg),
     onRestart: () => {
       logger.warn('♻️  Omstart begärd via Slack — avslutar (pm2 startar om)');
+      markRestart(RESTART_FLAG); // bekräftas vid nästa uppstart
       process.exit(0);
     },
   },
@@ -477,6 +483,11 @@ process.on('SIGINT', async () => {
 
   // Starta Slack-kommandolyssnare (no-op om disabled)
   await slackCommands.start();
+
+  // Bekräfta i Slack om denna uppstart var en begärd !restart
+  if (consumeRestartFlag(RESTART_FLAG)) {
+    notifier.send('✅ Uppe igen efter omstart');
+  }
 
   // Starta Playwright DOM-övervakning
   if (playwrightController) {
