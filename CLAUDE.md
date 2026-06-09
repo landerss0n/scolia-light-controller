@@ -82,6 +82,25 @@ KNX IP-gateway ──extern länk──→ LightShark (KNX allOff/allOn påverka
 - `triggerAction(actionName)` - Kör namngiven action från config (t.ex. 'allOff', 'allOn')
 - `disconnect()` - Koppla ner
 
+### lib/backoff.js
+- Ren, testad funktion `nextBackoffDelay(attempt, opts, rand)` — exponentiell backoff + tak + jitter
+- Används av **WS-reconnect** (index.js) och **Playwright-restart** (playwright.js) så att permanenta fel inte hamrar var X:e sekund i all evighet
+- Räknaren nollställs vid lyckad anslutning/start; logg eskalerar till error-nivå efter N försök i rad
+
+### lib/notifier.js
+- `SlackNotifier` — skickar driftlarm till Slack via incoming webhook (inbyggd `fetch`, ingen ny dependency)
+- **Incident-baserad dedup:** `alert(key, msg)` skickar bara om incidenten inte redan är aktiv; `recover(key, msg)` skickar "✅ tillbaka" bara om den var aktiv. → ett larm per incident, recovery när det löser sig, ingen spam
+- Skapas alltid i index.js — `enabled: false` eller saknad `slackWebhookUrl` → no-op
+- Skickas in i `LightSharkController` och `PlaywrightController` (3:e konstruktor-argument, valfritt)
+- Fire-and-forget med 5s timeout (AbortController) — ett Slack-fel kraschar aldrig appen
+- **Incident-keys:** `scolia-down` (index.js, vid `reconnectAlertAfter`), `lightshark-down` (lightshark.js, vid `failureAlertAfter`), `playwright-down` (playwright.js, vid `restartAlertAfter`), `app-crash` (index.js `uncaughtException`, best-effort innan exit)
+- Config: `notifications.enabled`, `notifications.slackWebhookUrl`, `notifications.label`
+
+### Robusthet / felsynlighet
+- **WS-reconnect:** `reconnectAttempts` med backoff. Config: `scolia.reconnectDelay` (bas), `scolia.reconnectMaxDelay` (tak, default 60000), `scolia.reconnectAlertAfter` (default 5). Nollställs i `ws.on('open')`
+- **Playwright-restart:** `restartAttempts` med backoff. Config (under `playwright`): `restartBaseDelayMs` (default 10000), `restartMaxDelayMs` (default 300000), `restartAlertAfter` (default 3). Nollställs vid lyckad `launch()`
+- **LightShark OSC:** OSC är UDP (kan ej bekräfta leverans), men socket-fel fångas. `consecutiveFailures` eskalerar till tydlig error efter `lightshark.failureAlertAfter` (default 3) fel i rad, och loggar "svarar igen" vid recovery
+
 
 ## Nuvarande ljuslogik (colorMode)
 

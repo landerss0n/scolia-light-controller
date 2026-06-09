@@ -12,20 +12,26 @@ const { Logger } = require('./lib/logger');
 const { parseSector } = require('./lib/sector');
 const { resolveThrowEffect, applyExecutor } = require('./lib/effects');
 const { detectSpecialEvent } = require('./lib/specialEvents');
+const { nextBackoffDelay } = require('./lib/backoff');
+const { SlackNotifier } = require('./lib/notifier');
 
 // Ladda konfiguration
 const config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
 
 // Initiera komponenter
 const logger = new Logger(config.logging);
-const lightshark = config.lightshark.enabled ? new LightSharkController(config.lightshark, logger) : null;
+// Notifier skapas alltid — disabled/utan webhook blir den en no-op, så alla
+// anropsställen kan kalla alert/recover utan att kolla om den finns.
+const notifier = new SlackNotifier(config.notifications || {}, logger);
+const lightshark = config.lightshark.enabled ? new LightSharkController(config.lightshark, logger, notifier) : null;
 const sound = config.sound?.enabled ? new SoundController(config.sound, logger) : null;
 const knxController = config.knx?.enabled ? new KnxController(config.knx, logger) : null;
-const playwrightController = config.playwright?.enabled ? new PlaywrightController(config.playwright, logger) : null;
+const playwrightController = config.playwright?.enabled ? new PlaywrightController(config.playwright, logger, notifier) : null;
 let knxLightsOff = false; // Spårar om KNX-lampor är släckta (från miss)
 
 let ws = null;
 let reconnectTimeout = null;
+let reconnectAttempts = 0; // Räknare för exponentiell backoff vid reconnect
 let throwHistory = [];
 let lastTriggeredExecutor = null; // Spara senaste executor för att kunna släcka vid takeout
 let lastSpecialExecutors = []; // Spårar 180-executors för att kunna toggla av vid takeout
@@ -111,6 +117,8 @@ function connectToScolia() {
     logger.success('✓ Ansluten till Scolia!');
     logger.info('Väntar på dart-events...');
     console.log('');
+    reconnectAttempts = 0; // Lyckad anslutning — nollställ backoff
+    notifier.recover('scolia-down', 'Scolia-anslutningen är återställd');
   });
 
   ws.on('message', (data) => {
@@ -136,14 +144,29 @@ function connectToScolia() {
     knxLightsOff = false;
     if (strobeTimer) { clearTimeout(strobeTimer); strobeTimer = null; }
 
-    // Återanslut efter delay
+    // Återanslut med exponentiell backoff så ett permanent fel inte hamrar
+    // var 5:e sekund i all evighet. Backoff nollställs vid lyckad anslutning.
     if (!reconnectTimeout) {
-      const jitter = Math.floor(Math.random() * 2000);
+      reconnectAttempts += 1;
+      const delay = nextBackoffDelay(reconnectAttempts, {
+        baseMs: config.scolia.reconnectDelay,
+        maxMs: config.scolia.reconnectMaxDelay || 60000,
+        jitterMs: 2000,
+      });
+      const secs = (delay / 1000).toFixed(1);
+      // Eskalera till error-nivå när problemet ser ut att vara ihållande
+      const escalateAfter = config.scolia.reconnectAlertAfter || 5;
+      if (reconnectAttempts >= escalateAfter) {
+        logger.error(`⚠️  Scolia-anslutningen är nere — försök #${reconnectAttempts} misslyckades. Kontrollera nätverk/token. Nytt försök om ${secs}s`);
+        notifier.alert('scolia-down', `Scolia-anslutningen är nere (försök #${reconnectAttempts} misslyckades). Inga dartkast detekteras.`);
+      } else {
+        logger.warn(`Återansluter om ${secs}s (försök #${reconnectAttempts})`);
+      }
       reconnectTimeout = setTimeout(() => {
         reconnectTimeout = null;
         logger.info('Försöker återansluta...');
         connectToScolia();
-      }, config.scolia.reconnectDelay + jitter);
+      }, delay);
     }
   });
 }
@@ -402,6 +425,19 @@ function generateUUID() {
 // Fånga okontrollerade async-fel
 process.on('unhandledRejection', (err) => {
   logger.error('Ohanterat async-fel:', err?.message || err);
+});
+
+// Ohanterat fel → appen kraschar. Best-effort: försök skicka Slack-larm (max
+// ~1.5s) innan vi avslutar, så pm2 kan starta om medan vi ändå får veta.
+process.on('uncaughtException', async (err) => {
+  logger.error('💥 Ohanterat fel — appen kraschar:', err?.stack || err?.message || err);
+  try {
+    await Promise.race([
+      notifier.alert('app-crash', `Appen kraschade: ${err?.message || err}`),
+      new Promise((resolve) => setTimeout(resolve, 1500)),
+    ]);
+  } catch { /* aldrig låta larmet hindra exit */ }
+  process.exit(1);
 });
 
 // Graceful shutdown

@@ -162,6 +162,17 @@
     "_comment_fullscreen": "true = starta browser i fullscreen/kiosk-läge"
   },
 
+  "notifications": {
+    "enabled": false,
+    "_comment_enabled": "true = skicka Slack-larm vid driftproblem (Scolia nere, LightShark svarar inte, Playwright dött, krasch)",
+
+    "slackWebhookUrl": "",
+    "_comment_slackWebhookUrl": "Slack Incoming Webhook-URL (https://hooks.slack.com/services/...)",
+
+    "label": "Scolia (madrixpc)",
+    "_comment_label": "Prefix i larmen så du ser vilken maskin/app det gäller"
+  },
+
   "logging": {
     "enabled": true,
     "logFile": "dart-events.log",

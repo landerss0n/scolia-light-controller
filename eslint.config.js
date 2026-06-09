@@ -20,6 +20,9 @@ module.exports = [
         exports: 'readonly',
         Buffer: 'readonly',
         URL: 'readonly',
+        AbortController: 'readonly',
+        fetch: 'readonly',
+        globalThis: 'readonly',
       },
     },
     rules: {
